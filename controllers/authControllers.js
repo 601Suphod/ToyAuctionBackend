@@ -160,86 +160,7 @@ const MAX_DEVICES = 50;
 //   }
 // };
 
-const register = async (req, res) => {
-  if (!req.body) {
-    return res.status(400).send({ status: "error", message: "Body cannot be empty!" });
-  }
 
-  const { name, email, password, phone, userType = "regular", userData = {} } = req.body;
-  const businessId = req.headers["businessid"];
-
-  if (!name) return res.status(400).send({ status: "error", message: "Name cannot be empty!" });
-  if (!email) return res.status(400).send({ status: "error", message: "Email cannot be empty!" });
-  if (!password) return res.status(400).send({ status: "error", message: "Password cannot be empty!" });
-  if (!businessId) return res.status(400).send({ status: "error", message: "Business ID cannot be empty!" });
-
-  try {
-    let findUser = await user.findOne({ "user.email": email, businessId });
-
-    if (findUser) {
-      return res.status(409).send({ status: "error", message: "User already exists. Please login instead." });
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-    let userDataDocument;
-
-    if (userType === "regular") {
-      userDataDocument = new regularUserData(userData);
-    } else if (userType === "organization") {
-      userDataDocument = new organizationUserData(userData);
-    }
-    await userDataDocument.save();
-
-    // ✅ บันทึก User
-    const newUser = new user({
-      user: {
-        name,
-        email,
-        phone, // ✅ เพิ่มเบอร์โทรศัพท์
-        password: hashedPassword,
-      },
-      userType,
-      userData: userDataDocument._id,
-      userTypeData: userType === "regular" ? "RegularUserData" : "OrganizationUserData",
-      businessId,
-    });
-    await newUser.save();
-
-    // ✅ สร้าง Profile และเชื่อม User
-    const newProfile = new Profile({ // ✅ ใช้ Profile (ตัว P ใหญ่)
-      user: newUser._id,
-      name,
-      phone, // ✅ เก็บเบอร์โทร
-    });
-    await newProfile.save();
-
-    // ✅ ส่งอีเมลยืนยัน
-    let activationToken = crypto.randomBytes(32).toString("hex");
-    let refKey = crypto.randomBytes(2).toString("hex").toUpperCase();
-
-    await redis.hSet(
-      email,
-      { token: activationToken, ref: refKey },
-      { EX: 600 }
-    );
-    await redis.expire(email, 600);
-
-    const link = `${process.env.BASE_URL}/api/v1/accounts/verify/email?email=${email}&ref=${refKey}&token=${activationToken}`;
-    await sendEmail(email, "Verify Email For ToyAuction", link);
-
-    res.status(201).send({
-      status: "success",
-      message: "Successfully Registered! Please confirm email address.",
-      data: {
-        userId: newUser._id,
-        profileId: newProfile._id,
-      },
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).send({ status: "error", message: "Internal server error." });
-  }
-};
 
 // const login = async (req, res, next) => {
 //   try {
@@ -399,6 +320,87 @@ const register = async (req, res) => {
 //     next(err);
 //   }
 // };
+
+const register = async (req, res) => {
+  if (!req.body) {
+    return res.status(400).send({ status: "error", message: "Body cannot be empty!" });
+  }
+
+  const { name, email, password, phone, userType = "regular", userData = {} } = req.body;
+  const businessId = req.headers["businessid"];
+
+  if (!name) return res.status(400).send({ status: "error", message: "Name cannot be empty!" });
+  if (!email) return res.status(400).send({ status: "error", message: "Email cannot be empty!" });
+  if (!password) return res.status(400).send({ status: "error", message: "Password cannot be empty!" });
+  if (!businessId) return res.status(400).send({ status: "error", message: "Business ID cannot be empty!" });
+
+  try {
+    let findUser = await user.findOne({ "user.email": email, businessId });
+
+    if (findUser) {
+      return res.status(409).send({ status: "error", message: "User already exists. Please login instead." });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    let userDataDocument;
+
+    if (userType === "regular") {
+      userDataDocument = new regularUserData(userData);
+    } else if (userType === "organization") {
+      userDataDocument = new organizationUserData(userData);
+    }
+    await userDataDocument.save();
+
+    // ✅ บันทึก User
+    const newUser = new user({
+      user: {
+        name,
+        email,
+        phone, // ✅ เพิ่มเบอร์โทรศัพท์
+        password: hashedPassword,
+      },
+      userType,
+      userData: userDataDocument._id,
+      userTypeData: userType === "regular" ? "RegularUserData" : "OrganizationUserData",
+      businessId,
+    });
+    await newUser.save();
+
+    // ✅ สร้าง Profile และเชื่อม User
+    const newProfile = new Profile({ // ✅ ใช้ Profile (ตัว P ใหญ่)
+      user: newUser._id,
+      name,
+      phone, // ✅ เก็บเบอร์โทร
+    });
+    await newProfile.save();
+
+    // ✅ ส่งอีเมลยืนยัน
+    let activationToken = crypto.randomBytes(32).toString("hex");
+    let refKey = crypto.randomBytes(2).toString("hex").toUpperCase();
+
+    await redis.hSet(
+      email,
+      { token: activationToken, ref: refKey },
+      { EX: 600 }
+    );
+    await redis.expire(email, 600);
+
+    const link = `${process.env.BASE_URL}/api/v1/accounts/verify/email?email=${email}&ref=${refKey}&token=${activationToken}`;
+    await sendEmail(email, "Verify Email For ToyAuction", link);
+
+    res.status(201).send({
+      status: "success",
+      message: "Successfully Registered! Please confirm email address.",
+      data: {
+        userId: newUser._id,
+        profileId: newProfile._id,
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({ status: "error", message: "Internal server error." });
+  }
+};
 
 const login = async (req, res, next) => {
   try {
