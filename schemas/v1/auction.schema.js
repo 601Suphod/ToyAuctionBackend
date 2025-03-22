@@ -49,6 +49,10 @@ const auctionSchema = new mongoose.Schema({
     profileImage: { type: String }
   },
   createdAt: { type: Date, default: Date.now },
+  editCount: {
+    type: Number,
+    default: 0, // จำนวนเริ่มต้นเป็น 0
+  },
 });
 
 module.exports = mongoose.model("Auction", auctionSchema);

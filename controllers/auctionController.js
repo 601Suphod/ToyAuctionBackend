@@ -298,7 +298,8 @@ exports.createAuction = async (req, res) => {
       expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
       owner: userId,
       category,
-      seller: sellerInfo // ✅ เพิ่มข้อมูลผู้ขาย
+      seller: sellerInfo,
+      editCount: 2
     });
 
     await auction.save();
@@ -323,62 +324,62 @@ exports.createAuction = async (req, res) => {
   }
 };
 
-exports.checkAndEndAuctions = async () => {
-  try {
-    console.log("📌 กำลังตรวจสอบการประมูลที่หมดเวลา...");
+// exports.checkAndEndAuctions = async () => {
+//   try {
+//     console.log("📌 กำลังตรวจสอบการประมูลที่หมดเวลา...");
 
-    const now = new Date();
-    const expiredAuctions = await Auction.find({ expiresAt: { $lte: now }, status: "active" })
-      .populate("highestBidder", "email name")
-      .populate("owner", "email name");
+//     const now = new Date();
+//     const expiredAuctions = await Auction.find({ expiresAt: { $lte: now }, status: "active" })
+//       .populate("highestBidder", "email name")
+//       .populate("owner", "email name");
 
-    if (expiredAuctions.length === 0) {
-      console.log("⚠️ ไม่มีการประมูลที่ต้องปิด");
-      return;
-    }
+//     if (expiredAuctions.length === 0) {
+//       console.log("⚠️ ไม่มีการประมูลที่ต้องปิด");
+//       return;
+//     }
 
-    for (const auction of expiredAuctions) {
-      console.log(`🚨 ปิดการประมูล: ${auction.name}`);
+//     for (const auction of expiredAuctions) {
+//       console.log(`🚨 ปิดการประมูล: ${auction.name}`);
 
-      auction.status = "ended";
-      auction.finalPrice = auction.currentPrice;
+//       auction.status = "ended";
+//       auction.finalPrice = auction.currentPrice;
 
-      let winnerEmail = auction.highestBidder?.email || auction.highestBidderEmail;
-      let winnerName = auction.highestBidder?.name || "ไม่มีผู้ชนะ";
+//       let winnerEmail = auction.highestBidder?.email || auction.highestBidderEmail;
+//       let winnerName = auction.highestBidder?.name || "ไม่มีผู้ชนะ";
 
-      // ✅ ถ้า `highestBidderEmail` ไม่มี ให้ดึงจากฐานข้อมูล
-      if (!winnerEmail && auction.highestBidder) {
-        console.log("🔍 ไม่พบอีเมลของผู้ชนะ กำลังดึงข้อมูลใหม่...");
-        const winner = await User.findById(auction.highestBidder);
-        winnerEmail = winner?.email || null;
+//       // ✅ ถ้า `highestBidderEmail` ไม่มี ให้ดึงจากฐานข้อมูล
+//       if (!winnerEmail && auction.highestBidder) {
+//         console.log("🔍 ไม่พบอีเมลของผู้ชนะ กำลังดึงข้อมูลใหม่...");
+//         const winner = await User.findById(auction.highestBidder);
+//         winnerEmail = winner?.email || null;
 
-        if (winnerEmail) {
-          auction.highestBidderEmail = winnerEmail; // ✅ อัปเดตฐานข้อมูล
-          console.log(`✅ พบอีเมลของผู้ชนะจากฐานข้อมูล: ${winnerEmail}`);
-        } else {
-          console.log(`⚠️ ไม่พบอีเมลของผู้ชนะในฐานข้อมูล`);
-        }
-      }
+//         if (winnerEmail) {
+//           auction.highestBidderEmail = winnerEmail; // ✅ อัปเดตฐานข้อมูล
+//           console.log(`✅ พบอีเมลของผู้ชนะจากฐานข้อมูล: ${winnerEmail}`);
+//         } else {
+//           console.log(`⚠️ ไม่พบอีเมลของผู้ชนะในฐานข้อมูล`);
+//         }
+//       }
 
-      // ✅ ส่งอีเมลแจ้งผู้ชนะ (ถ้ามี)
-      if (winnerEmail) {
-        console.log(`📢 ส่งอีเมลแจ้งเตือนถึงผู้ชนะ: ${winnerEmail}`);
-        try {
-          await sendWinnerEmail(winnerEmail, auction.name, auction.finalPrice);
-          console.log(`✅ ส่งอีเมลสำเร็จถึง: ${winnerEmail}`);
-        } catch (emailError) {
-          console.error(`❌ ส่งอีเมลล้มเหลว: ${emailError.message}`);
-        }
-      }
+//       // ✅ ส่งอีเมลแจ้งผู้ชนะ (ถ้ามี)
+//       if (winnerEmail) {
+//         console.log(`📢 ส่งอีเมลแจ้งเตือนถึงผู้ชนะ: ${winnerEmail}`);
+//         try {
+//           await sendWinnerEmail(winnerEmail, auction.name, auction.finalPrice);
+//           console.log(`✅ ส่งอีเมลสำเร็จถึง: ${winnerEmail}`);
+//         } catch (emailError) {
+//           console.error(`❌ ส่งอีเมลล้มเหลว: ${emailError.message}`);
+//         }
+//       }
 
-      await auction.save();
-    }
+//       await auction.save();
+//     }
 
-    console.log(`✅ ปิดการประมูลสำเร็จ ${expiredAuctions.length} รายการ`);
-  } catch (err) {
-    console.error("❌ Error checking and ending auctions:", err);
-  }
-};
+//     console.log(`✅ ปิดการประมูลสำเร็จ ${expiredAuctions.length} รายการ`);
+//   } catch (err) {
+//     console.error("❌ Error checking and ending auctions:", err);
+//   }
+// };
 
 // ✅ GET: ดึงรายละเอียดของประมูล
 // exports.getAuctionById = async (req, res) => {
@@ -421,6 +422,72 @@ exports.checkAndEndAuctions = async () => {
 // };
 
 // 📌 ดึงรายละเอียดประมูล
+
+exports.checkAndEndAuctions = async () => {
+  try {
+    console.log("📌 กำลังตรวจสอบการประมูลที่หมดเวลา...");
+
+    const now = new Date();
+    const expiredAuctions = await Auction.find({ expiresAt: { $lte: now }, status: "active" })
+      .populate("highestBidder", "email name")
+      .populate("owner", "email name");
+
+    if (expiredAuctions.length === 0) {
+      console.log("⚠️ ไม่มีการประมูลที่ต้องปิด");
+      return;
+    }
+
+    for (const auction of expiredAuctions) {
+      console.log(`🚨 ปิดการประมูล: ${auction.name}`);
+
+      auction.status = "ended";
+      auction.finalPrice = auction.currentPrice;
+
+      // ✅ เช็คว่าราคาปัจจุบัน (currentPrice) มากกว่าหรือเท่ากับราคาเริ่มต้น (startingPrice)
+      let winnerEmail = auction.highestBidder?.email || auction.highestBidderEmail;
+      let winnerName = auction.highestBidder?.name || "ไม่มีผู้ชนะ";
+
+      // หากราคาปัจจุบันน้อยกว่าราคาเริ่มต้น จะไม่ถือว่าเป็นผู้ชนะ
+      if (auction.currentPrice < auction.startingPrice) {
+        winnerEmail = null;
+        winnerName = "ไม่มีผู้ชนะ";
+      }
+
+      // ✅ ถ้า `highestBidderEmail` ไม่มี ให้ดึงจากฐานข้อมูล
+      if (!winnerEmail && auction.highestBidder) {
+        console.log("🔍 ไม่พบอีเมลของผู้ชนะ กำลังดึงข้อมูลใหม่...");
+        const winner = await User.findById(auction.highestBidder);
+        winnerEmail = winner?.email || null;
+
+        if (winnerEmail) {
+          auction.highestBidderEmail = winnerEmail; // ✅ อัปเดตฐานข้อมูล
+          console.log(`✅ พบอีเมลของผู้ชนะจากฐานข้อมูล: ${winnerEmail}`);
+        } else {
+          console.log(`⚠️ ไม่พบอีเมลของผู้ชนะในฐานข้อมูล`);
+        }
+      }
+
+      // ✅ ส่งอีเมลแจ้งผู้ชนะ (ถ้ามี)
+      if (winnerEmail) {
+        console.log(`📢 ส่งอีเมลแจ้งเตือนถึงผู้ชนะ: ${winnerEmail}`);
+        try {
+          await sendWinnerEmail(winnerEmail, auction.name, auction.finalPrice);
+          console.log(`✅ ส่งอีเมลสำเร็จถึง: ${winnerEmail}`);
+        } catch (emailError) {
+          console.error(`❌ ส่งอีเมลล้มเหลว: ${emailError.message}`);
+        }
+      }
+
+      await auction.save();
+    }
+
+    console.log(`✅ ปิดการประมูลสำเร็จ ${expiredAuctions.length} รายการ`);
+  } catch (err) {
+    console.error("❌ Error checking and ending auctions:", err);
+  }
+};
+
+
 exports.getAuctionById = async (req, res) => {
   try {
     const auction = await Auction.findById(req.params.id)
@@ -663,6 +730,311 @@ exports.getAuctionHistory = async (req, res) => {
 //   }
 // };
 
+// exports.placeBid = async (req, res) => {
+//   try {
+//     console.log("📌 คุกกี้ทั้งหมดที่ได้รับ:", req.cookies);
+
+//     const { amount } = req.body;
+//     const { id } = req.params;
+//     const userId = req.user?.userId;
+
+//     const auction = await Auction.findById(id);
+//     if (!auction) {
+//       return res.status(404).send({ status: "error", message: "Auction not found" });
+//     }
+
+//     //  ป้องกันการบิดต่อกันโดยผู้ใช้เดิม
+//     if (auction.highestBidder && auction.highestBidder.toString() === userId) {
+//       return res.status(400).send({ 
+//         status: "error", 
+//         message: "คุณไม่สามารถบิดต่อกันเองได้ กรุณารอให้มีผู้ใช้คนอื่นบิดก่อน" 
+//       });
+//     }
+
+//     if (amount < auction.currentPrice + auction.minimumBidIncrement) {
+//       return res.status(400).send({ status: "error", message: "Bid too low" });
+//     }
+
+//     //  ดึงข้อมูลผู้ใช้ทุกครั้งที่มีการบิด
+//     const user = await User.findById(userId, "name email");
+//     if (!user) {
+//       return res.status(404).json({ status: "error", message: "User not found" });
+//     }
+
+//     let userProfile = await Profile.findOne({ user: userId }, "name");
+
+//     const userName = userProfile?.name || user?.name;
+//     if (!userName) {
+//       console.error("❌ Error: User name not found");
+//       return res.status(404).json({ status: "error", message: "User name not found" });
+//     }
+
+//     console.log("📌 ชื่อผู้บิด:", userName);
+
+//     const token = req.cookies?.accessToken || req.headers.authorization?.split(" ")[1];
+//     console.log("📌 Token ที่ใช้:", token);
+
+//     if (!token) {
+//       return res.status(401).send({ status: "error", message: "Unauthorized: No token found" });
+//     }
+
+//     const bidderEmail = req.cookies?.email ? decodeURIComponent(req.cookies.email) : null;
+//     console.log("📌 ค่าของ bidderEmail:", bidderEmail);
+
+//     if (!bidderEmail) {
+//       console.log("❌ ไม่มีคุกกี้ email");
+//       return res.status(400).send({ status: "error", message: "User email not found in cookies" });
+//     }
+
+//     //  สร้างการบิดใหม่
+//     const bid = new Bid({
+//       auction: auction._id,
+//       userName: userName,
+//       user: req.user.userId,
+//       amount
+//     });
+
+//     //  แจ้งเตือนผู้ใช้ที่ถูกแซงในการประมูล
+//     if (auction.highestBidder && auction.highestBidder.toString() !== userId) {
+//       const existingNotification = await Notification.findOne({
+//         user: auction.highestBidder,
+//         message: { $regex: new RegExp(`มีผู้ประมูลสูงกว่าคุณใน "${auction.name}"`), $options: "i" },
+//         type: "outbid_warning"
+//       });
+
+//       if (!existingNotification) {
+//         await Notification.create({
+//           user: auction.highestBidder,
+//           message: `⚠️ มีผู้ประมูลสูงกว่าคุณใน "${auction.name}"`,
+//           type: "outbid_warning"
+//         });
+//       }
+//     }
+
+//     //  แจ้งเตือนให้กับผู้ที่บิดใหม่ (ถ้ายังไม่เคยได้รับ)
+//     const bidSuccessNotification = await Notification.findOne({
+//       user: userId,
+//       message: { $regex: new RegExp(`บิดประมูล "${auction.name}"`), $options: "i" },
+//       type: "bid_success"
+//     });
+
+//     if (!bidSuccessNotification) {
+//       await Notification.create({
+//         user: userId,
+//         message: `🎯 คุณได้ทำการบิดประมูล "${auction.name}" สำเร็จแล้ว!`,
+//         type: "bid_success"
+//       });
+//     }
+
+//     //  อัปเดต Auction ให้เก็บข้อมูลของผู้บิดสูงสุด
+//     auction.currentPrice = amount;
+//     auction.highestBidder = req.user.userId;
+//     auction.highestBidderEmail = bidderEmail;
+//     auction.highestBidderName = userName;
+//     auction.bids.push(bid._id);
+
+//     await auction.save();
+//     await bid.save();
+
+//     console.log("✅ อัปเดต highestBidderName สำเร็จ:", userName);
+
+//     res.status(201).send({ status: "success", data: { auction, bid } });
+//   } catch (err) {
+//     console.error("❌ Error placing bid:", err);
+//     res.status(500).send({ status: "error", message: err.message });
+//   }
+// };
+
+// exports.placeBid = async (req, res) => {
+//   try {
+//     console.log("📌 คุกกี้ทั้งหมดที่ได้รับ:", req.cookies);
+
+//     const { amount } = req.body;
+//     const { id } = req.params;
+//     const userId = req.user?.userId;
+
+//     const auction = await Auction.findById(id).populate("bids"); // ✅ โหลดข้อมูลการประมูลพร้อมประวัติการบิด
+//     if (!auction) {
+//       return res.status(404).send({ status: "error", message: "Auction not found" });
+//     }
+
+//     // ✅ อัปเดตราคาเริ่มต้นถ้ายังไม่มีผู้บิด
+//     if (auction.bids.length === 0) {
+//       console.log("📌 ยังไม่มีการบิด -> อัปเดต currentPrice เท่ากับ startingPrice");
+//       auction.currentPrice = auction.startingPrice;
+//     }
+
+//     // ✅ ป้องกันการบิดต่อกันเอง
+//     if (auction.highestBidder && auction.highestBidder.toString() === userId) {
+//       return res.status(400).send({ 
+//         status: "error", 
+//         message: "คุณไม่สามารถบิดต่อกันเองได้ กรุณารอให้มีผู้ใช้คนอื่นบิดก่อน" 
+//       });
+//     }
+
+//     // ✅ ตรวจสอบว่าการบิดใหม่ต้องมากกว่าหรือเท่ากับ startingPrice
+//     if (amount < auction.startingPrice) {
+//       return res.status(400).send({ status: "error", message: "ราคาประมูลต้องมากกว่าหรือเท่ากับราคาเริ่มต้น" });
+//     }
+
+//     // ✅ ตรวจสอบว่าการบิดใหม่ต้องมากกว่าหรือเท่ากับ currentPrice + minimumBidIncrement
+//     if (amount < auction.currentPrice + auction.minimumBidIncrement) {
+//       return res.status(400).send({ status: "error", message: "ราคาบิดต้องสูงกว่าราคาปัจจุบันและขั้นต่ำที่กำหนด" });
+//     }
+
+//     // ✅ ดึงข้อมูลผู้ใช้
+//     const user = await User.findById(userId, "name email");
+//     if (!user) {
+//       return res.status(404).json({ status: "error", message: "User not found" });
+//     }
+//     let userProfile = await Profile.findOne({ user: userId }, "name");
+//     const userName = userProfile?.name || user?.name;
+//     if (!userName) {
+//       console.error("❌ Error: User name not found");
+//       return res.status(404).json({ status: "error", message: "User name not found" });
+//     }
+
+//     console.log("📌 ชื่อผู้บิด:", userName);
+
+//     // ✅ ตรวจสอบ Token
+//     const token = req.cookies?.accessToken || req.headers.authorization?.split(" ")[1];
+//     if (!token) {
+//       return res.status(401).send({ status: "error", message: "Unauthorized: No token found" });
+//     }
+
+//     const bidderEmail = req.cookies?.email ? decodeURIComponent(req.cookies.email) : null;
+//     if (!bidderEmail) {
+//       return res.status(400).send({ status: "error", message: "User email not found in cookies" });
+//     }
+
+//     // ✅ สร้างการบิดใหม่
+//     const bid = new Bid({
+//       auction: auction._id,
+//       userName: userName,
+//       user: req.user.userId,
+//       amount
+//     });
+
+//     // ✅ อัปเดตราคาปัจจุบันตามเงื่อนไข
+//     if (auction.bids.length === 0 || amount > auction.startingPrice) {
+//       auction.currentPrice = amount;
+//     } else {
+//       auction.currentPrice = auction.startingPrice;
+//     }
+
+//     // ✅ อัปเดตผู้บิดสูงสุด
+//     auction.highestBidder = req.user.userId;
+//     auction.highestBidderEmail = bidderEmail;
+//     auction.highestBidderName = userName;
+//     auction.bids.push(bid._id);
+
+//     await auction.save();
+//     await bid.save();
+
+//     console.log("✅ อัปเดต highestBidderName สำเร็จ:", userName);
+
+//     res.status(201).send({ status: "success", data: { auction, bid } });
+//   } catch (err) {
+//     console.error("❌ Error placing bid:", err);
+//     res.status(500).send({ status: "error", message: err.message });
+//   }
+// };
+
+// exports.placeBid = async (req, res) => {
+//   try {
+//     console.log("📌 คุกกี้ทั้งหมดที่ได้รับ:", req.cookies);
+
+//     const { amount } = req.body;
+//     const { id } = req.params;
+//     const userId = req.user?.userId;
+
+//     const auction = await Auction.findById(id).populate("bids"); // ✅ โหลดข้อมูลการประมูลพร้อมประวัติการบิด
+//     if (!auction) {
+//       return res.status(404).send({ status: "error", message: "Auction not found" });
+//     }
+
+//     // ✅ อัปเดตราคาเริ่มต้นถ้ายังไม่มีผู้บิด
+//     if (auction.bids.length === 0) {
+//       console.log("📌 ยังไม่มีการบิด -> อัปเดต currentPrice เท่ากับ startingPrice");
+//       auction.currentPrice = auction.startingPrice;
+//     }
+
+//     // ✅ ป้องกันการบิดต่อกันเอง (หลังจากแก้ไขการประมูล, ผู้ชนะถูกล้าง)
+//     if (auction.highestBidder && auction.highestBidder.toString() === userId && auction.editCount <= 0) {
+//       return res.status(400).send({ 
+//         status: "error", 
+//         message: "คุณไม่สามารถบิดต่อกันเองได้ กรุณารอให้มีผู้ใช้คนอื่นบิดก่อน" 
+//       });
+//     }
+
+//     // ✅ ตรวจสอบว่าการบิดใหม่ต้องมากกว่าหรือเท่ากับ startingPrice
+//     if (amount < auction.startingPrice) {
+//       return res.status(400).send({ status: "error", message: "ราคาประมูลต้องมากกว่าหรือเท่ากับราคาเริ่มต้น" });
+//     }
+
+//     // ✅ ตรวจสอบว่าการบิดใหม่ต้องมากกว่าหรือเท่ากับ currentPrice + minimumBidIncrement
+//     if (amount < auction.currentPrice + auction.minimumBidIncrement) {
+//       return res.status(400).send({ status: "error", message: "ราคาบิดต้องสูงกว่าราคาปัจจุบันและขั้นต่ำที่กำหนด" });
+//     }
+
+//     // ✅ ดึงข้อมูลผู้ใช้
+//     const user = await User.findById(userId, "name email");
+//     if (!user) {
+//       return res.status(404).json({ status: "error", message: "User not found" });
+//     }
+//     let userProfile = await Profile.findOne({ user: userId }, "name");
+//     const userName = userProfile?.name || user?.name;
+//     if (!userName) {
+//       console.error("❌ Error: User name not found");
+//       return res.status(404).json({ status: "error", message: "User name not found" });
+//     }
+
+//     console.log("📌 ชื่อผู้บิด:", userName);
+
+//     // ✅ ตรวจสอบ Token
+//     const token = req.cookies?.accessToken || req.headers.authorization?.split(" ")[1];
+//     if (!token) {
+//       return res.status(401).send({ status: "error", message: "Unauthorized: No token found" });
+//     }
+
+//     const bidderEmail = req.cookies?.email ? decodeURIComponent(req.cookies.email) : null;
+//     if (!bidderEmail) {
+//       return res.status(400).send({ status: "error", message: "User email not found in cookies" });
+//     }
+
+//     // ✅ สร้างการบิดใหม่
+//     const bid = new Bid({
+//       auction: auction._id,
+//       userName: userName,
+//       user: req.user.userId,
+//       amount
+//     });
+
+//     // ✅ อัปเดตราคาปัจจุบันตามเงื่อนไข
+//     if (auction.bids.length === 0 || amount > auction.startingPrice) {
+//       auction.currentPrice = amount;
+//     } else {
+//       auction.currentPrice = auction.startingPrice;
+//     }
+
+//     // ✅ อัปเดตผู้บิดสูงสุด
+//     auction.highestBidder = req.user.userId;
+//     auction.highestBidderEmail = bidderEmail;
+//     auction.highestBidderName = userName;
+//     auction.bids.push(bid._id);
+
+//     await auction.save();
+//     await bid.save();
+
+//     console.log("✅ อัปเดต highestBidderName สำเร็จ:", userName);
+
+//     res.status(201).send({ status: "success", data: { auction, bid } });
+//   } catch (err) {
+//     console.error("❌ Error placing bid:", err);
+//     res.status(500).send({ status: "error", message: err.message });
+//   }
+// };
+
 exports.placeBid = async (req, res) => {
   try {
     console.log("📌 คุกกี้ทั้งหมดที่ได้รับ:", req.cookies);
@@ -671,12 +1043,18 @@ exports.placeBid = async (req, res) => {
     const { id } = req.params;
     const userId = req.user?.userId;
 
-    const auction = await Auction.findById(id);
+    const auction = await Auction.findById(id).populate("bids"); // ✅ โหลดข้อมูลการประมูลพร้อมประวัติการบิด
     if (!auction) {
       return res.status(404).send({ status: "error", message: "Auction not found" });
     }
 
-    // ❌ ป้องกันการบิดต่อกันโดยผู้ใช้เดิม
+    // ✅ อัปเดตราคาเริ่มต้นถ้ายังไม่มีผู้บิด
+    if (auction.bids.length === 0) {
+      console.log("📌 ยังไม่มีการบิด -> อัปเดต currentPrice เท่ากับ startingPrice");
+      auction.currentPrice = auction.startingPrice;
+    }
+
+    // ✅ ป้องกันการบิดต่อกันเอง (ต้องตรวจสอบว่าผู้ใช้งานไม่ใช่ highestBidder ก่อน)
     if (auction.highestBidder && auction.highestBidder.toString() === userId) {
       return res.status(400).send({ 
         status: "error", 
@@ -684,18 +1062,22 @@ exports.placeBid = async (req, res) => {
       });
     }
 
-    if (amount < auction.currentPrice + auction.minimumBidIncrement) {
-      return res.status(400).send({ status: "error", message: "Bid too low" });
+    // ✅ ตรวจสอบว่าการบิดใหม่ต้องมากกว่าหรือเท่ากับ startingPrice
+    if (amount < auction.startingPrice) {
+      return res.status(400).send({ status: "error", message: "ราคาประมูลต้องมากกว่าหรือเท่ากับราคาเริ่มต้น" });
     }
 
-    // ✅ ดึงข้อมูลผู้ใช้ทุกครั้งที่มีการบิด
+    // ✅ ตรวจสอบว่าการบิดใหม่ต้องมากกว่าหรือเท่ากับ currentPrice + minimumBidIncrement
+    if (amount < auction.currentPrice + auction.minimumBidIncrement) {
+      return res.status(400).send({ status: "error", message: "ราคาบิดต้องสูงกว่าราคาปัจจุบันและขั้นต่ำที่กำหนด" });
+    }
+
+    // ✅ ดึงข้อมูลผู้ใช้
     const user = await User.findById(userId, "name email");
     if (!user) {
       return res.status(404).json({ status: "error", message: "User not found" });
     }
-
     let userProfile = await Profile.findOne({ user: userId }, "name");
-
     const userName = userProfile?.name || user?.name;
     if (!userName) {
       console.error("❌ Error: User name not found");
@@ -704,18 +1086,14 @@ exports.placeBid = async (req, res) => {
 
     console.log("📌 ชื่อผู้บิด:", userName);
 
+    // ✅ ตรวจสอบ Token
     const token = req.cookies?.accessToken || req.headers.authorization?.split(" ")[1];
-    console.log("📌 Token ที่ใช้:", token);
-
     if (!token) {
       return res.status(401).send({ status: "error", message: "Unauthorized: No token found" });
     }
 
     const bidderEmail = req.cookies?.email ? decodeURIComponent(req.cookies.email) : null;
-    console.log("📌 ค่าของ bidderEmail:", bidderEmail);
-
     if (!bidderEmail) {
-      console.log("❌ ไม่มีคุกกี้ email");
       return res.status(400).send({ status: "error", message: "User email not found in cookies" });
     }
 
@@ -727,40 +1105,14 @@ exports.placeBid = async (req, res) => {
       amount
     });
 
-    // ✅ แจ้งเตือนผู้ใช้ที่ถูกแซงในการประมูล
-    if (auction.highestBidder && auction.highestBidder.toString() !== userId) {
-      const existingNotification = await Notification.findOne({
-        user: auction.highestBidder,
-        message: { $regex: new RegExp(`มีผู้ประมูลสูงกว่าคุณใน "${auction.name}"`), $options: "i" },
-        type: "outbid_warning"
-      });
-
-      if (!existingNotification) {
-        await Notification.create({
-          user: auction.highestBidder,
-          message: `⚠️ มีผู้ประมูลสูงกว่าคุณใน "${auction.name}"`,
-          type: "outbid_warning"
-        });
-      }
+    // ✅ อัปเดตราคาปัจจุบันตามเงื่อนไข
+    if (auction.bids.length === 0 || amount > auction.startingPrice) {
+      auction.currentPrice = amount;
+    } else {
+      auction.currentPrice = auction.startingPrice;
     }
 
-    // ✅ แจ้งเตือนให้กับผู้ที่บิดใหม่ (ถ้ายังไม่เคยได้รับ)
-    const bidSuccessNotification = await Notification.findOne({
-      user: userId,
-      message: { $regex: new RegExp(`บิดประมูล "${auction.name}"`), $options: "i" },
-      type: "bid_success"
-    });
-
-    if (!bidSuccessNotification) {
-      await Notification.create({
-        user: userId,
-        message: `🎯 คุณได้ทำการบิดประมูล "${auction.name}" สำเร็จแล้ว!`,
-        type: "bid_success"
-      });
-    }
-
-    // ✅ อัปเดต Auction ให้เก็บข้อมูลของผู้บิดสูงสุด
-    auction.currentPrice = amount;
+    // ✅ อัปเดตผู้บิดสูงสุด
     auction.highestBidder = req.user.userId;
     auction.highestBidderEmail = bidderEmail;
     auction.highestBidderName = userName;
@@ -813,6 +1165,28 @@ exports.endAuctions = async () => {
   }
 };
 
+// exports.getBidHistory = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     if (!isValidObjectId(id)) {
+//       return res.status(400).send({ status: "error", message: "Invalid auction ID" });
+//     }
+
+//     // ✅ ดึงประวัติการบิดทั้งหมดของการประมูล พร้อม `user.name`
+//     const bids = await Bid.find({ auction: id })
+//       .populate("user", "user.name email") // ✅ ดึง `user.name` แทน `name`
+//       .sort({ createdAt: -1 });
+
+//     if (!bids.length) {
+//       return res.status(404).send({ status: "error", message: "No bids found" });
+//     }
+
+//     res.status(200).send({ status: "success", data: bids });
+//   } catch (err) {
+//     res.status(500).send({ status: "error", message: err.message });
+//   }
+// };
+
 exports.getBidHistory = async (req, res) => {
   try {
     const { id } = req.params;
@@ -834,6 +1208,7 @@ exports.getBidHistory = async (req, res) => {
     res.status(500).send({ status: "error", message: err.message });
   }
 };
+
 
 exports.getHighestBidder = async (req, res) => {
   try {
@@ -1038,6 +1413,25 @@ const getUserIdFromRequest = (req) => {
   }
 };
 
+// exports.getMyAuctionHistory = async (req, res) => {
+//   try {
+//     const userId = req.user?.userId; // ดึง userId โดยตรงจาก req.user
+//     if (!userId) {
+//       return res.status(401).send({ status: "error", message: "Unauthorized or invalid token" });
+//     }
+
+//     // ✅ ดึงประวัติการประมูลของตัวเอง + รูป
+//     const myAuctions = await Auction.find({ owner: userId })
+//       .select("name startingPrice currentPrice image createdAt expiresAt status")
+//       .sort({ createdAt: -1 });
+
+//     res.status(200).send({ status: "success", data: myAuctions });
+//   } catch (err) {
+//     console.error("❌ Error fetching auction history:", err);
+//     res.status(500).send({ status: "error", message: err.message });
+//   }
+// };
+
 exports.getMyAuctionHistory = async (req, res) => {
   try {
     const userId = req.user?.userId; // ดึง userId โดยตรงจาก req.user
@@ -1045,9 +1439,9 @@ exports.getMyAuctionHistory = async (req, res) => {
       return res.status(401).send({ status: "error", message: "Unauthorized or invalid token" });
     }
 
-    // ✅ ดึงประวัติการประมูลของตัวเอง + รูป
+    // ✅ ดึงประวัติการประมูลของตัวเอง + รูป และจำนวนครั้งที่แก้ไข
     const myAuctions = await Auction.find({ owner: userId })
-      .select("name startingPrice currentPrice image createdAt expiresAt status")
+      .select("name startingPrice currentPrice image createdAt expiresAt status editCount") // เพิ่ม editCount
       .sort({ createdAt: -1 });
 
     res.status(200).send({ status: "success", data: myAuctions });
@@ -1056,6 +1450,7 @@ exports.getMyAuctionHistory = async (req, res) => {
     res.status(500).send({ status: "error", message: err.message });
   }
 };
+
 
 exports.getMyBidHistory = async (req, res) => {
   try {
@@ -1364,3 +1759,151 @@ exports.searchAuctions = async (req, res) => {
   }
 };
 
+// exports.editAuction = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const { name, description, startingPrice, minimumBidIncrement, category } = req.body;
+
+//     const auction = await Auction.findById(id).populate("bids"); // ✅ โหลดข้อมูลพร้อมประวัติการบิด
+//     if (!auction) {
+//       return res.status(404).send({ status: "error", message: "Auction not found" });
+//     }
+
+//     // ✅ ตรวจสอบสิทธิ์ว่าเป็นเจ้าของหรือไม่
+//     if (auction.owner.toString() !== req.user.userId) {
+//       return res.status(403).send({ status: "error", message: "Unauthorized to edit this auction" });
+//     }
+
+//     // ✅ ตรวจสอบจำนวนครั้งที่สามารถแก้ไขได้ (สูงสุด 2 ครั้ง)
+//     if (auction.editCount >= 2) {
+//       return res.status(400).send({ status: "error", message: "คุณได้ทำการแก้ไขการประมูลนี้แล้ว 2 ครั้ง ไม่สามารถแก้ไขได้อีก" });
+//     }
+
+//     // ✅ อัปเดตข้อมูลที่แก้ไข
+//     auction.name = name || auction.name;
+//     auction.description = description || auction.description;
+//     auction.startingPrice = startingPrice || auction.startingPrice;
+//     auction.minimumBidIncrement = minimumBidIncrement || auction.minimumBidIncrement;
+//     auction.category = category || auction.category;
+
+//     // ✅ คำนวณ `currentPrice` ตามเงื่อนไข
+//     if (auction.bids.length === 0) {
+//       auction.currentPrice = auction.startingPrice; // 📌 ถ้ายังไม่มีคนบิด ให้ราคาปัจจุบันเท่ากับราคาเริ่มต้น
+//     } else {
+//       const highestBid = Math.max(...auction.bids.map(bid => bid.amount));
+//       auction.currentPrice = highestBid >= auction.startingPrice ? highestBid : auction.startingPrice;
+//     }
+
+//     // ✅ เพิ่มจำนวนการแก้ไข
+//     auction.editCount = auction.editCount + 1;
+
+//     await auction.save(); // ✅ บันทึกข้อมูลลงฐานข้อมูล
+
+//     res.status(200).send({ status: "success", data: auction });
+//   } catch (err) {
+//     console.error("❌ Error editing auction:", err);
+//     res.status(500).send({ status: "error", message: err.message });
+//   }
+// };
+
+// exports.editAuction = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const { name, description, startingPrice, minimumBidIncrement, category } = req.body;
+
+//     const auction = await Auction.findById(id).populate("bids");
+//     if (!auction) {
+//       return res.status(404).send({ status: "error", message: "Auction not found" });
+//     }
+
+//     // ตรวจสอบสิทธิ์ว่าเป็นเจ้าของการประมูลหรือไม่
+//     if (auction.owner.toString() !== req.user.userId) {
+//       return res.status(403).send({ status: "error", message: "Unauthorized to edit this auction" });
+//     }
+
+//     // ตรวจสอบจำนวนครั้งที่สามารถแก้ไขได้ (สูงสุด 2 ครั้ง)
+//     if (auction.editCount <= 0) {
+//       return res.status(400).send({ status: "error", message: "คุณได้ทำการแก้ไขการประมูลนี้แล้ว 2 ครั้ง ไม่สามารถแก้ไขได้อีก" });
+//     }
+
+//     // อัปเดตข้อมูลที่แก้ไข
+//     auction.name = name || auction.name;
+//     auction.description = description || auction.description;
+//     auction.startingPrice = startingPrice || auction.startingPrice;
+//     auction.minimumBidIncrement = minimumBidIncrement || auction.minimumBidIncrement;
+//     auction.category = category || auction.category;
+
+//     // คำนวณ `currentPrice` ตามเงื่อนไข
+//     if (auction.bids.length === 0) {
+//       auction.currentPrice = auction.startingPrice; // ถ้ายังไม่มีคนบิด ให้ราคาปัจจุบันเท่ากับราคาเริ่มต้น
+//     } else {
+//       const highestBid = Math.max(...auction.bids.map(bid => bid.amount));
+//       auction.currentPrice = highestBid >= auction.startingPrice ? highestBid : auction.startingPrice;
+//     }
+
+//     // ล้างข้อมูลของผู้ชนะ (ชื่อและอีเมล)
+//     auction.highestBidderEmail = null;
+//     auction.highestBidderName = null;
+
+//     // ลดจำนวนการแก้ไข (ครั้งละ 1)
+//     auction.editCount = auction.editCount - 1;
+
+//     await auction.save(); // บันทึกข้อมูลลงฐานข้อมูล
+
+//     res.status(200).send({ status: "success", data: auction });
+//   } catch (err) {
+//     console.error("❌ Error editing auction:", err);
+//     res.status(500).send({ status: "error", message: err.message });
+//   }
+// };
+
+exports.editAuction = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, description, startingPrice, minimumBidIncrement, category } = req.body;
+
+    const auction = await Auction.findById(id).populate("bids");
+    if (!auction) {
+      return res.status(404).send({ status: "error", message: "Auction not found" });
+    }
+
+    // ตรวจสอบสิทธิ์ว่าเป็นเจ้าของการประมูลหรือไม่
+    if (auction.owner.toString() !== req.user.userId) {
+      return res.status(403).send({ status: "error", message: "Unauthorized to edit this auction" });
+    }
+
+    // ตรวจสอบจำนวนครั้งที่สามารถแก้ไขได้ (สูงสุด 2 ครั้ง)
+    if (auction.editCount <= 0) {
+      return res.status(400).send({ status: "error", message: "คุณได้ทำการแก้ไขการประมูลนี้แล้ว 2 ครั้ง ไม่สามารถแก้ไขได้อีก" });
+    }
+
+    // อัปเดตข้อมูลที่แก้ไข
+    auction.name = name || auction.name;
+    auction.description = description || auction.description;
+    auction.startingPrice = startingPrice || auction.startingPrice;
+    auction.minimumBidIncrement = minimumBidIncrement || auction.minimumBidIncrement;
+    auction.category = category || auction.category;
+
+    // คำนวณ `currentPrice` ตามเงื่อนไข
+    if (auction.bids.length === 0) {
+      auction.currentPrice = auction.startingPrice; // ถ้ายังไม่มีคนบิด ให้ราคาปัจจุบันเท่ากับราคาเริ่มต้น
+    } else {
+      const highestBid = Math.max(...auction.bids.map(bid => bid.amount));
+      auction.currentPrice = highestBid >= auction.startingPrice ? highestBid : auction.startingPrice;
+    }
+
+    // ล้างข้อมูลของผู้ชนะ (ชื่อและอีเมล) หลังการแก้ไข
+    auction.highestBidderEmail = null;
+    auction.highestBidderName = null;
+
+    // ลดจำนวนการแก้ไข (ครั้งละ 1)
+    auction.editCount = auction.editCount - 1;
+
+    await auction.save(); // บันทึกข้อมูลลงฐานข้อมูล
+
+    res.status(200).send({ status: "success", data: auction });
+  } catch (err) {
+    console.error("❌ Error editing auction:", err);
+    res.status(500).send({ status: "error", message: err.message });
+  }
+};

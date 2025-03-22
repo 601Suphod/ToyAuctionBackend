@@ -3,7 +3,7 @@ const {
   createAuction, getAuctions, getAuctionById, placeBid, endAuctions, 
   getAuctionHistory, getBidHistory, forceEndAuctions, forceEndAuctionById, 
   getHighestBidder, forceExpirePayment, getCategories,getMyAuctionHistory, getMyBidHistory, getMyWinningBids, 
-  getAllAuctions, getNotifications, markAllNotificationsAsRead, getClosedAuctions, updateAuctionQR, searchAuctions
+  getAllAuctions, getNotifications, markAllNotificationsAsRead, getClosedAuctions, updateAuctionQR, searchAuctions,editAuction 
 } = require("../../controllers/auctionController");
 const { checkLogin } = require("../../middlewares/authMiddleware");
 const Auction = require("../../schemas/v1/auction.schema");
@@ -69,22 +69,6 @@ router.get("/:id/history", getAuctionHistory);
 router.get("/:id/bids", getBidHistory);
 router.get("/:id/highest-bidder", getHighestBidder);
 
-// ✅ ใช้ `checkLogin` เพื่อป้องกัน API ที่ต้องมีการล็อกอิน
-router.use(checkLogin);
-
-// ✅ ทำการบิด
-router.post("/:id/bids", placeBid);
-
-// ✅ อัปเดตสถานะการประมูลที่หมดเวลา
-router.post("/end-auctions", async (req, res) => {
-  try {
-    await endAuctions();
-    res.status(200).send({ status: "success", message: "Auctions checked and updated" });
-  } catch (err) {
-    res.status(500).send({ status: "error", message: err.message });
-  }
-});
-
 // ✅ ปิดการประมูลทั้งหมดแบบบังคับ
 router.post("/force-end-auctions", async (req, res) => {
   try {
@@ -108,6 +92,24 @@ router.post("/force-end-auction/:id", async (req, res) => {
 router.post("/force-expire-payment/:id", async (req, res) => {
   try {
     await forceExpirePayment(req, res);
+  } catch (err) {
+    res.status(500).send({ status: "error", message: err.message });
+  }
+});
+
+// ✅ ใช้ `checkLogin` เพื่อป้องกัน API ที่ต้องมีการล็อกอิน
+router.use(checkLogin);
+
+router.put("/:id", checkLogin, editAuction);
+
+// ✅ ทำการบิด
+router.post("/:id/bids", placeBid);
+
+// ✅ อัปเดตสถานะการประมูลที่หมดเวลา
+router.post("/end-auctions", async (req, res) => {
+  try {
+    await endAuctions();
+    res.status(200).send({ status: "success", message: "Auctions checked and updated" });
   } catch (err) {
     res.status(500).send({ status: "error", message: err.message });
   }
