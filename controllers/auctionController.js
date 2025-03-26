@@ -231,98 +231,98 @@ const mongoose = require("mongoose");
 //   }
 // };
 
-exports.createAuction = async (req, res) => {
-  try {
-    const { name, description, startingPrice, minimumBidIncrement = 10, category } = req.body;
+// exports.createAuction = async (req, res) => {
+//   try {
+//     const { name, description, startingPrice, minimumBidIncrement = 10, category } = req.body;
 
-    if (!name || !startingPrice || !category) {
-      return res.status(400).send({ status: "error", message: "Missing required fields" });
-    }
+//     if (!name || !startingPrice || !category) {
+//       return res.status(400).send({ status: "error", message: "Missing required fields" });
+//     }
 
-    // ✅ ดึง `Profile` พร้อม `User`
-    const userId = req.user.userId;
-    const profile = await Profile.findOne({ user: userId }).populate("user");
+//     // ✅ ดึง `Profile` พร้อม `User`
+//     const userId = req.user.userId;
+//     const profile = await Profile.findOne({ user: userId }).populate("user");
 
-    if (!profile) {
-      return res.status(404).send({ status: "error", message: "ไม่พบข้อมูลโปรไฟล์ผู้ขาย" });
-    }
+//     if (!profile) {
+//       return res.status(404).send({ status: "error", message: "ไม่พบข้อมูลโปรไฟล์ผู้ขาย" });
+//     }
 
-    const validCategories = [
-      "designer_toys", "vinyl_figures", "resin_figures", "blind_box",
-      "anime_figures", "movie_game_collectibles", "robot_mecha",
-      "soft_vinyl", "kaiju_monsters", "diy_custom", "retro_vintage",
-      "limited_edition", "gunpla_models", "plastic_models"
-    ];
+//     const validCategories = [
+//       "designer_toys", "vinyl_figures", "resin_figures", "blind_box",
+//       "anime_figures", "movie_game_collectibles", "robot_mecha",
+//       "soft_vinyl", "kaiju_monsters", "diy_custom", "retro_vintage",
+//       "limited_edition", "gunpla_models", "plastic_models"
+//     ];
 
-    console.log("📌 Profile Data:", profile);
-    console.log("📌 User Data:", profile.user);
+//     console.log("📌 Profile Data:", profile);
+//     console.log("📌 User Data:", profile.user);
 
-    // ✅ ดึง `email` และ `phone` จาก `profile.user.user.email`
-    const userEmail = profile.user?.user?.email || "ไม่มีอีเมล";
-    const userPhone = profile.user?.user?.phone || "ไม่มีเบอร์โทร";
+//     // ✅ ดึง `email` และ `phone` จาก `profile.user.user.email`
+//     const userEmail = profile.user?.user?.email || "ไม่มีอีเมล";
+//     const userPhone = profile.user?.user?.phone || "ไม่มีเบอร์โทร";
 
-    console.log("📌 Email Before Save:", userEmail);
-    console.log("📌 Phone Before Save:", userPhone);
+//     console.log("📌 Email Before Save:", userEmail);
+//     console.log("📌 Phone Before Save:", userPhone);
 
-    // ✅ ตรวจสอบการอัปโหลดรูปภาพ
-    if (!req.files || req.files.length === 0) {
-      return res.status(400).send({ status: "error", message: "ต้องอัปโหลดภาพสินค้าอย่างน้อย 1 ภาพ" });
-    }
+//     // ✅ ตรวจสอบการอัปโหลดรูปภาพ
+//     if (!req.files || req.files.length === 0) {
+//       return res.status(400).send({ status: "error", message: "ต้องอัปโหลดภาพสินค้าอย่างน้อย 1 ภาพ" });
+//     }
 
-    // ✅ แปลงไฟล์เป็น URL
-    const images = req.files.map(file => `${req.protocol}://${req.get("host")}/uploads/${file.filename}`);
+//     // ✅ แปลงไฟล์เป็น URL
+//     const images = req.files.map(file => `${req.protocol}://${req.get("host")}/uploads/${file.filename}`);
 
-    // ✅ แปลงโปรไฟล์รูปภาพเป็น Base64
-    const sellerProfileImage = profile.profileImage
-      ? `data:${profile.profileImage.contentType};base64,${profile.profileImage.data.toString("base64")}`
-      : "/default-profile.png";
+//     // ✅ แปลงโปรไฟล์รูปภาพเป็น Base64
+//     const sellerProfileImage = profile.profileImage
+//       ? `data:${profile.profileImage.contentType};base64,${profile.profileImage.data.toString("base64")}`
+//       : "/default-profile.png";
 
-    // ✅ จัดรูปแบบโปรไฟล์ผู้ขาย
-    const sellerInfo = {
-      name: profile.name || "ไม่ระบุชื่อ",
-      email: userEmail,  // ✅ ใช้ `profile.user.user.email`
-      phone: userPhone,  // ✅ ใช้ `profile.user.user.phone`
-      profileImage: sellerProfileImage
-    };
+//     // ✅ จัดรูปแบบโปรไฟล์ผู้ขาย
+//     const sellerInfo = {
+//       name: profile.name || "ไม่ระบุชื่อ",
+//       email: userEmail,  // ✅ ใช้ `profile.user.user.email`
+//       phone: userPhone,  // ✅ ใช้ `profile.user.user.phone`
+//       profileImage: sellerProfileImage
+//     };
 
-    console.log("📌 Seller Info Before Save:", sellerInfo);
+//     console.log("📌 Seller Info Before Save:", sellerInfo);
 
-    // ✅ บันทึกการประมูล
-    const auction = new Auction({
-      name,
-      description,
-      image: images,
-      startingPrice,
-      currentPrice: startingPrice,
-      minimumBidIncrement,
-      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-      owner: userId,
-      category,
-      seller: sellerInfo,
-      editCount: 2
-    });
+//     // ✅ บันทึกการประมูล
+//     const auction = new Auction({
+//       name,
+//       description,
+//       image: images,
+//       startingPrice,
+//       currentPrice: startingPrice,
+//       minimumBidIncrement,
+//       expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+//       owner: userId,
+//       category,
+//       seller: sellerInfo,
+//       editCount: 2
+//     });
 
-    await auction.save();
-    res.status(201).send({ status: "success", data: auction });
+//     await auction.save();
+//     res.status(201).send({ status: "success", data: auction });
 
-        // ✅ แจ้งเตือนผู้ใช้ทุกคนว่ามีสินค้าใหม่ลงทะเบียน (ยกเว้นเจ้าของสินค้า)
-        const allUsers = await User.find({ _id: { $ne: userId } }, "_id"); // ดึงผู้ใช้ทั้งหมด ยกเว้นเจ้าของ
-        if (allUsers.length > 0) {
-          const notifications = allUsers.map(user => ({
-            user: user._id,
-            message: `🆕 มีสินค้าประมูลใหม่: "${auction.name}"`,
-            type: "new_auction"
-          }));
+//         // ✅ แจ้งเตือนผู้ใช้ทุกคนว่ามีสินค้าใหม่ลงทะเบียน (ยกเว้นเจ้าของสินค้า)
+//         const allUsers = await User.find({ _id: { $ne: userId } }, "_id"); // ดึงผู้ใช้ทั้งหมด ยกเว้นเจ้าของ
+//         if (allUsers.length > 0) {
+//           const notifications = allUsers.map(user => ({
+//             user: user._id,
+//             message: `🆕 มีสินค้าประมูลใหม่: "${auction.name}"`,
+//             type: "new_auction"
+//           }));
     
-          await Notification.insertMany(notifications);
-          console.log(`📢 แจ้งเตือนสินค้าใหม่ "${auction.name}" ให้ผู้ใช้ ${allUsers.length} คน`);
-        }
+//           await Notification.insertMany(notifications);
+//           console.log(`📢 แจ้งเตือนสินค้าใหม่ "${auction.name}" ให้ผู้ใช้ ${allUsers.length} คน`);
+//         }
 
-  } catch (err) {
-    console.error("❌ Error creating auction:", err);
-    res.status(500).send({ status: "error", message: err.message });
-  }
-};
+//   } catch (err) {
+//     console.error("❌ Error creating auction:", err);
+//     res.status(500).send({ status: "error", message: err.message });
+//   }
+// };
 
 // exports.checkAndEndAuctions = async () => {
 //   try {
@@ -422,6 +422,99 @@ exports.createAuction = async (req, res) => {
 // };
 
 // 📌 ดึงรายละเอียดประมูล
+
+exports.createAuction = async (req, res) => { 
+  try {
+    const { name, description, startingPrice, minimumBidIncrement = 10, category } = req.body;
+
+    if (!name || !startingPrice || !category) {
+      return res.status(400).send({ status: "error", message: "Missing required fields" });
+    }
+
+    // ✅ ดึง `Profile` พร้อม `User`
+    const userId = req.user.userId;
+    const profile = await Profile.findOne({ user: userId }).populate("user");
+
+    if (!profile) {
+      return res.status(404).send({ status: "error", message: "ไม่พบข้อมูลโปรไฟล์ผู้ขาย" });
+    }
+
+    const validCategories = [
+      "designer_toys", "vinyl_figures", "resin_figures", "blind_box",
+      "anime_figures", "movie_game_collectibles", "robot_mecha",
+      "soft_vinyl", "kaiju_monsters", "diy_custom", "retro_vintage",
+      "limited_edition", "gunpla_models", "plastic_models"
+    ];
+
+    console.log("📌 Profile Data:", profile);
+    console.log("📌 User Data:", profile.user);
+
+    // ✅ ดึง `email` และ `phone` จาก `profile.user.user.email`
+    const userEmail = profile.user?.user?.email || "ไม่มีอีเมล";
+    const userPhone = profile.user?.user?.phone || "ไม่มีเบอร์โทร";
+
+    console.log("📌 Email Before Save:", userEmail);
+    console.log("📌 Phone Before Save:", userPhone);
+
+    // ✅ ตรวจสอบการอัปโหลดรูปภาพ
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).send({ status: "error", message: "ต้องอัปโหลดภาพสินค้าอย่างน้อย 1 ภาพ" });
+    }
+
+    // ✅ แปลงไฟล์เป็น URL
+    const images = req.files.map(file => `${req.protocol}://${req.get("host")}/uploads/${file.filename}`);
+
+    // ✅ แปลงโปรไฟล์รูปภาพเป็น Base64
+    const sellerProfileImage = profile.profileImage && profile.profileImage.data
+      ? `data:${profile.profileImage.contentType};base64,${profile.profileImage.data.toString("base64")}`
+      : "/default-profile.png"; // ใช้รูปโปรไฟล์เริ่มต้นหากไม่มีข้อมูลโปรไฟล์
+
+    // ✅ จัดรูปแบบโปรไฟล์ผู้ขาย
+    const sellerInfo = {
+      name: profile.name || "ไม่ระบุชื่อ",
+      email: userEmail,  // ✅ ใช้ `profile.user.user.email`
+      phone: userPhone,  // ✅ ใช้ `profile.user.user.phone`
+      profileImage: sellerProfileImage
+    };
+
+    console.log("📌 Seller Info Before Save:", sellerInfo);
+
+    // ✅ บันทึกการประมูล
+    const auction = new Auction({
+      name,
+      description,
+      image: images,
+      startingPrice,
+      currentPrice: startingPrice,
+      minimumBidIncrement,
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      owner: userId,
+      category,
+      seller: sellerInfo,
+      editCount: 2
+    });
+
+    await auction.save();
+    res.status(201).send({ status: "success", data: auction });
+
+    // ✅ แจ้งเตือนผู้ใช้ทุกคนว่ามีสินค้าใหม่ลงทะเบียน (ยกเว้นเจ้าของสินค้า)
+    const allUsers = await User.find({ _id: { $ne: userId } }, "_id"); // ดึงผู้ใช้ทั้งหมด ยกเว้นเจ้าของ
+    if (allUsers.length > 0) {
+      const notifications = allUsers.map(user => ({
+        user: user._id,
+        message: `🆕 มีสินค้าประมูลใหม่: "${auction.name}"`,
+        type: "new_auction"
+      }));
+
+      await Notification.insertMany(notifications);
+      console.log(`📢 แจ้งเตือนสินค้าใหม่ "${auction.name}" ให้ผู้ใช้ ${allUsers.length} คน`);
+    }
+
+  } catch (err) {
+    console.error("❌ Error creating auction:", err);
+    res.status(500).send({ status: "error", message: err.message });
+  }
+};
 
 exports.checkAndEndAuctions = async () => {
   try {
@@ -1129,7 +1222,6 @@ exports.placeBid = async (req, res) => {
     res.status(500).send({ status: "error", message: err.message });
   }
 };
-
 
 exports.endAuctions = async () => {
   try {

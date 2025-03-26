@@ -335,7 +335,7 @@ const register = async (req, res) => {
   if (!businessId) return res.status(400).send({ status: "error", message: "Business ID cannot be empty!" });
 
   try {
-    let findUser = await user.findOne({ "user.email": email, businessId });
+    let findUser = await user.findOne({ "user.email": email });
 
     if (findUser) {
       return res.status(409).send({ status: "error", message: "User already exists. Please login instead." });

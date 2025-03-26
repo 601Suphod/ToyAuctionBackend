@@ -4,39 +4,7 @@ const QRCodeModel = require("../schemas/v1/QRcode.shema");
 const Auction = require("../schemas/v1/auction.schema");
 const { v4: uuidv4 } = require("uuid");
 const fetch = require("node-fetch"); // ✅ ใช้ fetch เพื่อเรียก API ภายใน Backend
-
-  
-// 📌 ฟังก์ชันอัปโหลดสลิป
-exports.uploadSlip = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const slipImage = req.file ? req.file.path : null; // ใช้ multer อัปโหลดไฟล์
-
-    if (!slipImage) {
-      return res.status(400).json({ error: "กรุณาอัปโหลดรูปภาพสลิป" });
-    }
-
-    const qrCodeData = await QRCodeModel.findById(id);
-
-    if (!qrCodeData) {
-      return res.status(404).json({ error: "ไม่พบ QR Code" });
-    }
-
-    // ✅ อัปเดตสถานะการชำระเงิน
-    qrCodeData.slipImage = slipImage;
-    qrCodeData.isPaid = true;
-    await qrCodeData.save();
-
-    res.status(200).json({
-      success: true,
-      message: "อัปโหลดสลิปสำเร็จ",
-      slipImage,
-    });
-  } catch (error) {
-    console.error("❌ Error uploading slip:", error.message);
-    res.status(500).json({ error: "เกิดข้อผิดพลาดภายในระบบ" });
-  }
-};
+const Tesseract = require('tesseract.js');
 
 // 📌 ฟังก์ชันสร้าง QR Code พร้อมเพย์สำหรับการจ่ายเงิน
 exports.generatePaymentQR = async (req, res) => {
@@ -114,35 +82,40 @@ exports.checkPaymentStatus = async (req, res) => {
   }
 };
 
-// ฟังก์ชันสำหรับอัปโหลดสลิป
 exports.uploadSlip = async (req, res) => {
   try {
-    const { id } = req.params;
-    const slipImage = req.file ? req.file.path : null; // ใช้ multer เพื่ออัปโหลดไฟล์
-
-    if (!slipImage) {
-      return res.status(400).json({ error: "กรุณาอัปโหลดรูปภาพสลิป" });
-    }
-
-    const qrCodeData = await QRCodeModel.findById(id);
+    const qrCodeId = req.params.id;
+    const qrCodeData = await QRCodeModel.findById(qrCodeId);
 
     if (!qrCodeData) {
-      return res.status(404).json({ error: "ไม่พบ QR Code" });
+      return res.status(404).json({ success: false, message: "ไม่พบข้อมูล QR Code" });
     }
 
-    // อัปเดตข้อมูลสลิปในฐานข้อมูล
-    qrCodeData.slipImage = slipImage;
-    qrCodeData.isPaid = true;
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: "ไม่ได้อัปโหลดไฟล์สลิป" });
+    }
+
+    // ❌ ลบการเช็ค OCR
+    // const slipPath = req.file.path;
+    // const parsedAmount = await parseSlipAmount(slipPath);
+    // const expectedAmount = qrCodeData.amount;
+
+    // if (Math.abs(parsedAmount - expectedAmount) > 1) {
+    //   return res.status(400).json({ success: false, message: "จำนวนเงินในสลิปไม่ถูกต้อง" });
+    // }
+
+    qrCodeData.slipImage = `http://localhost:3111/${req.file.path}`;
+    qrCodeData.isPaid = false; // ✅ ยังไม่ยืนยันโดยผู้ขาย
     await qrCodeData.save();
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
-      message: "อัปโหลดสลิปสำเร็จ",
-      slipImage,
+      message: "อัปโหลดสลิปสำเร็จ รอผู้ขายตรวจสอบ",
+      slipImage: qrCodeData.slipImage,
     });
   } catch (error) {
-    console.error("Error uploading slip:", error.message);
-    res.status(500).json({ error: "เกิดข้อผิดพลาดภายในระบบ" });
+    console.error("❌ Upload slip error:", error);
+    res.status(500).json({ success: false, message: "เกิดข้อผิดพลาดในการอัปโหลดสลิป" });
   }
 };
 
@@ -334,6 +307,96 @@ exports.updateShippingAddress = async (req, res) => {
     res.status(500).json({ error: "เกิดข้อผิดพลาดในระบบ" });
   }
 };
+
+// ฟังก์ชันตรวจจับจำนวนเงินจากสลิป
+const parseSlipAmount = async (imagePath) => {
+  try {
+    const result = await Tesseract.recognize(
+      imagePath,
+      'eng', // ภาษา
+      {
+        logger: (m) => console.log(m), // บันทึกสถานะ
+      }
+    );
+
+    // แปลงข้อความที่ได้เป็นจำนวนเงิน
+    const amount = extractAmountFromText(result.text); // ใช้ฟังก์ชันดึงจำนวนเงินจาก OCR
+    return amount;
+  } catch (error) {
+    console.error("Error parsing slip amount:", error);
+    throw new Error("ไม่สามารถตรวจจับจำนวนเงินจากสลิปได้");
+  }
+};
+
+// ฟังก์ชันดึงจำนวนเงินจากข้อความที่ OCR ตรวจจับได้
+const extractAmountFromText = (text) => {
+  // ทำความสะอาดข้อความที่ OCR ตรวจจับได้ เช่น ลบช่องว่าง, ฿, และ , (comma)
+  const cleanedText = text.replace(/[,฿\s]/g, '');  // ลบ , ฿ และช่องว่าง
+  const regex = /\d+(?:\.\d{2})?/g;
+  const match = cleanedText.match(regex);
+  return match ? parseFloat(match[0]) : null;
+};
+
+exports.getSlipByAuctionId = async (req, res) => {
+  try {
+    const { auctionId } = req.params;
+
+    const qrCodeData = await QRCodeModel.findOne({ auctionId });
+
+    if (!qrCodeData) {
+      return res.status(404).json({ error: "ไม่พบข้อมูลการชำระเงินของการประมูลนี้" });
+    }
+
+    res.status(200).json({
+      success: true,
+      slipImage: qrCodeData.slipImage,
+      isPaid: qrCodeData.isPaid,
+      message: qrCodeData.isPaid ? "✅ การชำระเงินสำเร็จแล้ว" : "⏳ ยังไม่ได้ชำระเงิน",
+    });
+  } catch (error) {
+    console.error("❌ Error fetching slip by auctionId:", error.message);
+    res.status(500).json({ error: "เกิดข้อผิดพลาดภายในระบบ" });
+  }
+};
+
+exports.uploadSlipByAuctionId = async (req, res) => {
+  try {
+    const { auctionId } = req.params;
+    const slipImagePath = req.file ? `/uploads/slips/${req.file.filename}` : null;
+
+    if (!slipImagePath) {
+      return res.status(400).json({ success: false, message: "❌ ไม่มีสลิปที่ถูกอัปโหลด" });
+    }
+
+    // สามารถบันทึกข้อมูลสลิปกับการประมูลได้ที่นี่ เช่น เก็บในฐานข้อมูล
+    // ใช้ auctionId เพื่อบันทึกข้อมูล
+
+    return res.status(200).json({ success: true, slipImage: slipImagePath });
+  } catch (error) {
+    console.error("❌ Error while uploading slip:", error);
+    return res.status(500).json({ success: false, message: "❌ เกิดข้อผิดพลาดในการอัปโหลดสลิป" });
+  }
+};
+
+exports.confirmPaymentByAuctionId = async (req, res) => {
+  try {
+    const { auctionId } = req.params;
+    const qrCodeData = await QRCodeModel.findOne({ auctionId });
+
+    if (!qrCodeData) {
+      return res.status(404).json({ success: false, message: "ไม่พบข้อมูลการชำระเงิน" });
+    }
+
+    qrCodeData.isPaid = true;
+    await qrCodeData.save();
+
+    res.status(200).json({ success: true, message: "อัปเดตสถานะการชำระเงินเรียบร้อยแล้ว" });
+  } catch (error) {
+    console.error("❌ confirmPaymentByAuctionId:", error.message);
+    res.status(500).json({ success: false, message: "เกิดข้อผิดพลาดในการอัปเดตสถานะ" });
+  }
+};
+
 
 // 📌 รันตรวจสอบทุกๆ 5 นาที
 setInterval(checkPaymentsAutomatically, 5 * 60 * 1000);
