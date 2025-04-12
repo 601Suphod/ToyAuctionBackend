@@ -1,46 +1,47 @@
 const express = require("express");
 const multer = require("multer");
 const path = require("path");
-const fs = require("fs");  // เพิ่มการ import fs
+const fs = require("fs");
+
 const paymentController = require("../../controllers/paymentController");
+
+const { checkLogin, isAdmin } = require("../../middlewares/authMiddleware");
 
 const router = express.Router();
 
-// 📌 ตั้งค่าอัปโหลดไฟล์สลิป
+/* ---------------------- 📦 ตั้งค่าอัปโหลดไฟล์สลิป ---------------------- */
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    // ตรวจสอบว่าโฟลเดอร์ 'uploads/slips' มีอยู่หรือไม่
     const uploadPath = "uploads/slips/";
     if (!fs.existsSync(uploadPath)) {
-      fs.mkdirSync(uploadPath, { recursive: true });  // สร้างโฟลเดอร์หากไม่มี
+      fs.mkdirSync(uploadPath, { recursive: true });
     }
-    cb(null, uploadPath);  // เก็บไฟล์ไว้ในโฟลเดอร์นี้
+    cb(null, uploadPath);
   },
   filename: function (req, file, cb) {
-    cb(null, Date.now() + path.extname(file.originalname));  // ตั้งชื่อไฟล์ใหม่
+    cb(null, Date.now() + path.extname(file.originalname));
   },
 });
 const upload = multer({ storage });
 
-// 🔹 สร้าง QR Code
-// router.post("/generate-qr", paymentController.generatePromptPayQR);
+/* ---------------------- 🛡️ ROUTES สำหรับ USER ---------------------- */
 
-router.post("/generate-qr", paymentController.generateSellerQR);
+router.post("/generate-qr", checkLogin, paymentController.generatePaymentQR);
+router.post("/upload-slip/:paymentId", checkLogin, upload.single("slip"), paymentController.uploadPaymentSlip);
+router.get("/payment-status/:id", checkLogin, paymentController.checkPaymentStatus);
+router.get("/slip-by-auction/:auctionId", checkLogin, paymentController.getSlipByAuctionId);
+router.post("/confirm-payment/by-auction/:auctionId", checkLogin, paymentController.confirmPaymentByAuctionId);
+router.post("/shipping-status/:paymentId", checkLogin, paymentController.updateShippingStatus);
+router.post("/shipping-address/:paymentId", checkLogin, paymentController.updateShippingAddress);
 
-// 🔹 ตรวจสอบสถานะการชำระเงิน
-router.get("/payment-status/:id", paymentController.checkPaymentStatus);
+/* ---------------------- 🛡️ ROUTES สำหรับ ADMIN ---------------------- */
 
-// 🔹 อัปโหลดสลิปการโอนเงิน
-router.post("/upload-slip/:id", upload.single("slip"), paymentController.uploadSlip);
+router.get("/admin/pending", checkLogin, isAdmin, paymentController.getPendingPayments);
+router.post("/admin/:id/approve", checkLogin, isAdmin, paymentController.approvePayment);
+router.get("/admin/paid", checkLogin, isAdmin, paymentController.getPaidPaymentsByDateRange); // ✅ ใหม่
+router.post("/admin/:id/reject", checkLogin, isAdmin, paymentController.rejectPayment);
+router.get("/admin/payment/:id", checkLogin, isAdmin, paymentController.getPaymentById);
 
-// ✅ ตรวจสอบสถานะการชำระเงิน
-router.get("/check-status/:id", paymentController.checkPaymentStatus);
-
-router.get("/slip-by-auction/:auctionId", paymentController.getSlipByAuctionId);
-
-router.post("/upload-slip/by-auction/:auctionId", upload.single("slip"), paymentController.uploadSlipByAuctionId);
-
-router.post("/confirm-payment/by-auction/:auctionId", paymentController.confirmPaymentByAuctionId);
-
+/* --------------------------------------------------------------------- */
 
 module.exports = router;

@@ -1,24 +1,28 @@
 const jwt = require('jsonwebtoken');
-const cookieParser = require('cookie-parser');
 
-// Middleware สำหรับตรวจสอบการเข้าสู่ระบบ
+// ✅ ตรวจสอบ token และแนบ user เข้า req
 const checkLogin = (req, res, next) => {
   const token = req.cookies.accessToken;
 
   if (!token) {
-    return res.status(401).json({ message: 'Unauthorized, token missing' });
+    return res.status(401).json({ status: "error", message: "Unauthorized, token missing" });
   }
 
-  // ตรวจสอบ validity ของ token
-  jwt.verify(token, process.env.JWT_ACCESS_TOKEN_SECRET, (err, decoded) => {
-    if (err) {
-      return res.status(401).json({ message: 'Unauthorized, invalid token' });
-    }
-
-    // ถ้า token ถูกต้อง, ให้ proceed กับการทำงานต่อไป
-    req.user = decoded; // ใส่ข้อมูลผู้ใช้ไว้ใน request
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_ACCESS_TOKEN_SECRET);
+    req.user = decoded; // { userId, role }
     next();
-  });
+  } catch (err) {
+    return res.status(401).json({ status: "error", message: "Unauthorized, invalid token" });
+  }
 };
 
-module.exports = { checkLogin };
+// ✅ ตรวจสอบสิทธิ์แอดมิน
+const isAdmin = (req, res, next) => {
+  if (!req.user || req.user.role !== "admin") {
+    return res.status(403).json({ status: "error", message: "ต้องเป็นแอดมินเท่านั้น" });
+  }
+  next();
+};
+
+module.exports = { checkLogin, isAdmin };

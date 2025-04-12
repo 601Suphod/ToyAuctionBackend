@@ -1,30 +1,46 @@
 const mongoose = require("mongoose");
 
+// ✅ เพิ่ม field สำหรับชื่อผู้รับ, เบอร์โทร, ตำแหน่ง GPS
+const addressSchema = new mongoose.Schema({
+  label: { type: String, required: true },              // เช่น "บ้าน", "ที่ทำงาน"
+  fullAddress: { type: String, required: true },        // ที่อยู่เต็ม
+  name: { type: String, required: true },               // ชื่อผู้รับ
+  phone: { type: String, required: true },              // เบอร์ผู้รับ
+  isDefault: { type: Boolean, default: false },
+  location: {
+    lat: { type: Number, default: null },
+    lng: { type: Number, default: null }
+  }
+});
+
 const profileSchema = new mongoose.Schema(
   {
     user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, unique: true },
     name: { type: String, required: true },
+    email: { type: String, required: true },
     phone: { type: String },
-    address: { type: String },
+    gender: { type: String, enum: ["male", "female", "other"], default: "other" },
+    birthday: { type: Date },
+    addresses: [addressSchema],
     profileImage: {
-      data: Buffer, 
+      data: Buffer,
       contentType: String
     },
     loginHistory: [
       {
         ipAddress: { type: String },
         userAgent: { type: String },
-        device: { type: String },   // ✅ เพิ่มข้อมูลอุปกรณ์
-        os: { type: String },       // ✅ เพิ่มระบบปฏิบัติการ
-        browser: { type: String },  // ✅ เพิ่มเบราว์เซอร์
-        location: { type: String }, // ✅ เพิ่มตำแหน่งที่ตั้ง
+        device: { type: String },
+        os: { type: String },
+        browser: { type: String },
+        location: { type: String },
         timestamp: { type: Date, default: Date.now }
       }
     ],
     winningBids: [
       {
         auction: { type: mongoose.Schema.Types.ObjectId, ref: "Auction" },
-        finalPrice: { type: Number }, 
+        finalPrice: { type: Number },
         wonAt: { type: Date, default: Date.now }
       }
     ]
@@ -32,20 +48,12 @@ const profileSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// ✅ จำกัดให้เก็บแค่ 10 รายการล่าสุด (middleware)
+// จำกัด loginHistory แค่ 10 รายการ
 profileSchema.pre("save", function (next) {
   if (this.loginHistory.length > 10) {
     this.loginHistory = this.loginHistory.slice(0, 10);
   }
   next();
 });
-
-// ✅ ใช้ Virtual Field เพื่อดึง `email` และ `phone` จาก `User`
-profileSchema.virtual("email").get(function () {
-  return this.user ? this.user.email : "ไม่มีอีเมล";
-});
-
-profileSchema.set("toObject", { virtuals: true });
-profileSchema.set("toJSON", { virtuals: true });
 
 module.exports = mongoose.model("Profile", profileSchema);

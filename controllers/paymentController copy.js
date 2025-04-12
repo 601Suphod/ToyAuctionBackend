@@ -24,7 +24,6 @@ exports.generatePaymentQR = async (req, res) => {
       return res.status(400).json({ error: "❌ ผู้ขายไม่มีเบอร์พร้อมเพย์" });
     }
 
-    // 🔍 ตรวจสอบว่ามี payment เดิมอยู่หรือยัง
     let payment = await Payment.findOne({
       auctionId,
       isPaid: false,
@@ -40,13 +39,9 @@ exports.generatePaymentQR = async (req, res) => {
       });
     }
 
-    // ✅ ดึงข้อมูลโปรไฟล์ พร้อม user
+    // ✅ ดึงโปรไฟล์ พร้อม populate user เพื่อดึงเบอร์
     const profile = await Profile.findOne({ user: auction.highestBidder }).populate("user");
     const defaultAddr = profile?.addresses?.find(addr => addr.isDefault) || profile?.addresses?.[0];
-
-    if (!defaultAddr) {
-      return res.status(400).json({ error: "❌ ผู้ใช้ยังไม่มีที่อยู่" });
-    }
 
     const payload = generatePayload(sellerPhone, { amount: auction.currentPrice });
     const qrCode = await qrcode.toDataURL(payload);
@@ -56,9 +51,9 @@ exports.generatePaymentQR = async (req, res) => {
       auctionId,
       amount: auction.currentPrice,
       qrCode,
-      shippingAddress: defaultAddr.fullAddress || "",
-      recipientName: defaultAddr.name || "",
-      recipientPhone: defaultAddr.phone || "",
+      shippingAddress: defaultAddr?.fullAddress || "",
+      recipientName: profile?.name || "",
+      recipientPhone: profile?.user?.phone || profile?.phone || "", // ✅ จุดนี้!
       expiresAt: new Date(Date.now() + 15 * 60 * 1000),
     });
 
@@ -78,25 +73,24 @@ exports.getSlipByAuctionId = async (req, res) => {
   try {
     const { auctionId } = req.params;
 
-    // ✅ ดึงข้อมูล Payment ล่าสุด ไม่ว่า slip จะมีหรือไม่
-    const payment = await Payment.findOne({ auctionId })
-      .sort({ createdAt: -1 });
+    const payment = await Payment.findOne({
+      auctionId,
+      slipImage: { $ne: null }
+    }).sort({ createdAt: -1 });
 
-    if (!payment) {
-      console.log("📍 ไม่พบ payment สำหรับ auctionId:", auctionId);
-      return res.status(404).json({ error: "ไม่พบข้อมูลการชำระเงิน" });
-    }
+    if (!payment) return res.status(404).json({ error: "ไม่พบข้อมูล" });
 
     res.status(200).json({
       success: true,
       paymentId: payment._id,
-      slipImage: payment.slipImage || null,
+      slipImage: payment.slipImage,
       isPaid: payment.isPaid,
       status: payment.status,
       shippingStatus: payment.shippingStatus,
       trackingNumber: payment.trackingNumber,
       note: payment.note || "",
 
+      // ✅ ดึงจาก payment schema โดยตรง (เพราะเราเซฟลงไปแล้ว)
       recipientName: payment.recipientName || "",
       recipientPhone: payment.recipientPhone || "",
       shippingAddress: payment.shippingAddress || ""

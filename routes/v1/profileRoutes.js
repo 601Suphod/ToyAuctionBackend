@@ -1,73 +1,105 @@
 const express = require("express");
-const { getProfile, updateProfile, getLoginHistory, uploadProfileImage } = require("../../controllers/profileController");
+const {
+  getProfile,
+  updateProfile,           // ✅ ต้องมี
+  getLoginHistory,
+  uploadProfileImage,
+  addAddress,              // ✅ ใหม่
+  deleteAddress,           // ✅ ใหม่
+  setDefaultAddress        // ✅ ใหม่
+} = require("../../controllers/profileController");
+
 const { checkLogin } = require("../../middlewares/authMiddleware");
 const multer = require("multer");
-const Profile = require("../../schemas/v1/profile.schema"); // นำเข้า Profile Model
+const Profile = require("../../schemas/v1/profile.schema");
 
 const router = express.Router();
-const upload = multer({ storage: multer.memoryStorage() }); // ใช้ memoryStorage() เพื่อดึงไฟล์จาก buffer
+const upload = multer({ storage: multer.memoryStorage() });
 
 router.use(checkLogin);
 
+// 🔹 โปรไฟล์หลัก
 router.get("/", getProfile);
-router.put("/", updateProfile);
-router.get("/history", getLoginHistory);
 
+router.get("/history", getLoginHistory);
+router.post("/addresses", addAddress);
+router.delete("/addresses/:addressId", deleteAddress);
+router.patch("/addresses/default/:addressId", setDefaultAddress);
+
+
+// 🔹 อัปโหลดรูปโปรไฟล์
 router.post("/upload", upload.single("image"), async (req, res) => {
   try {
-      console.log("User Info:", req.user); 
-      console.log("🔍 Debug Uploaded File:", req.file); // ✅ ตรวจสอบไฟล์ที่ได้รับ
+    if (!req.user?.userId) return res.status(401).json({ error: "Unauthorized" });
+    if (!req.file) return res.status(400).json({ error: "กรุณาอัปโหลดไฟล์ภาพ" });
 
-      if (!req.user || !req.user.userId) {
-          return res.status(401).json({ error: "Unauthorized: กรุณาเข้าสู่ระบบ" });
-      }
+    const profile = await Profile.findOne({ user: req.user.userId });
+    if (!profile) return res.status(404).json({ error: "ไม่พบโปรไฟล์ของผู้ใช้" });
 
-      if (!req.file) {
-          return res.status(400).json({ error: "กรุณาอัปโหลดไฟล์ภาพ" });
-      }
+    profile.profileImage = {
+      data: Buffer.from(req.file.buffer),
+      contentType: req.file.mimetype,
+    };
+    await profile.save();
 
-      const profile = await Profile.findOne({ user: req.user.userId });
-      if (!profile) {
-          return res.status(404).json({ error: "ไม่พบโปรไฟล์ของผู้ใช้" });
-      }
-
-      profile.profileImage = {
-          data: Buffer.from(req.file.buffer), // ✅ ป้องกันการบันทึก Buffer ผิดพลาด
-          contentType: req.file.mimetype
-      };
-
-      await profile.save();
-      console.log("✅ Image Uploaded Successfully!");
-      res.json({ message: "อัปโหลดรูปโปรไฟล์สำเร็จ!" });
-
+    res.json({ success: true, message: "อัปโหลดรูปโปรไฟล์สำเร็จ!" });
   } catch (error) {
-      console.error("🚨 Upload Error:", error);
-      res.status(500).json({ error: "เกิดข้อผิดพลาดในการอัปโหลดรูปภาพ" });
+    console.error("🚨 Upload Error:", error);
+    res.status(500).json({ error: "เกิดข้อผิดพลาดในการอัปโหลดรูปภาพ" });
   }
 });
 
+// 🔹 ดึงรูปโปรไฟล์
 router.get("/image", async (req, res) => {
   try {
-      console.log("🛠 Debug req.user:", req.user); 
+    if (!req.user?.userId) return res.status(401).json({ error: "Unauthorized" });
 
-      if (!req.user || !req.user.userId) {
-          return res.status(401).json({ error: "Unauthorized: กรุณาเข้าสู่ระบบ" });
-      }
+    const profile = await Profile.findOne({ user: req.user.userId });
+    if (!profile?.profileImage?.data) {
+      return res.status(404).json({ error: "ไม่พบรูปโปรไฟล์" });
+    }
 
-      const profile = await Profile.findOne({ user: req.user.userId });
-
-      if (!profile || !profile.profileImage || !profile.profileImage.data) {
-          return res.status(404).json({ error: "ไม่พบรูปโปรไฟล์" });
-      }
-
-      console.log("🖼 Debug Profile Image:", profile.profileImage);
-
-      res.json({
-          image: `data:${profile.profileImage.contentType};base64,${profile.profileImage.data.toString("base64")}`
-      });
+    res.json({
+      success: true,
+      image: `data:${profile.profileImage.contentType};base64,${profile.profileImage.data.toString("base64")}`,
+    });
   } catch (error) {
-      console.error("🚨 Get Image Error:", error);
-      res.status(500).json({ error: "เกิดข้อผิดพลาดในการดึงรูปภาพ" });
+    console.error("🚨 Get Image Error:", error);
+    res.status(500).json({ error: "เกิดข้อผิดพลาดในการดึงรูปภาพ" });
+  }
+});
+
+// ✅ ดึงที่อยู่ทั้งหมด
+router.get("/addresses", async (req, res) => {
+  try {
+    const profile = await Profile.findOne({ user: req.user.userId });
+    if (!profile) return res.status(404).json({ success: false, error: "ไม่พบโปรไฟล์" });
+
+    res.json({ success: true, addresses: profile.addresses || [] });
+  } catch (err) {
+    console.error("❌ GET /addresses error:", err);
+    res.status(500).json({ success: false, error: "เกิดข้อผิดพลาดในการดึงที่อยู่" });
+  }
+});
+
+// ✅ เพิ่มที่อยู่ใหม่
+router.post("/addresses", async (req, res) => {
+  try {
+    const { label, fullAddress } = req.body;
+    if (!label || !fullAddress) {
+      return res.status(400).json({ success: false, error: "กรุณาระบุ label และ fullAddress" });
+    }
+
+    const profile = await Profile.findOne({ user: req.user.userId });
+    if (!profile) return res.status(404).json({ success: false, error: "ไม่พบโปรไฟล์" });
+
+    profile.addresses.push({ label, fullAddress });
+    await profile.save();
+
+    res.json({ success: true, addresses: profile.addresses });
+  } catch (err) {
+    console.error("❌ POST /addresses error:", err);
+    res.status(500).json({ success: false, error: "เกิดข้อผิดพลาดในการเพิ่มที่อยู่" });
   }
 });
 

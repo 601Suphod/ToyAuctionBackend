@@ -326,63 +326,56 @@ const register = async (req, res) => {
     return res.status(400).send({ status: "error", message: "Body cannot be empty!" });
   }
 
-  const { name, email, password, phone, userType = "regular", userData = {} } = req.body;
-  const businessId = req.headers["businessid"];
+  const { name, email, password, phone, gender = "other", birthday } = req.body;
 
   if (!name) return res.status(400).send({ status: "error", message: "Name cannot be empty!" });
   if (!email) return res.status(400).send({ status: "error", message: "Email cannot be empty!" });
   if (!password) return res.status(400).send({ status: "error", message: "Password cannot be empty!" });
-  if (!businessId) return res.status(400).send({ status: "error", message: "Business ID cannot be empty!" });
 
   try {
-    let findUser = await user.findOne({ "user.email": email });
-
-    if (findUser) {
+    const existingUser = await user.findOne({ "user.email": email });
+    if (existingUser) {
       return res.status(409).send({ status: "error", message: "User already exists. Please login instead." });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    let userDataDocument;
 
-    if (userType === "regular") {
-      userDataDocument = new regularUserData(userData);
-    } else if (userType === "organization") {
-      userDataDocument = new organizationUserData(userData);
-    }
-    await userDataDocument.save();
-
-    // ✅ บันทึก User
+    // ✅ บันทึก User (ไม่มี userType, userData, businessId แล้ว)
     const newUser = new user({
       user: {
         name,
         email,
-        phone, // ✅ เพิ่มเบอร์โทรศัพท์
+        phone,
         password: hashedPassword,
+        gender,
+        birthday,
       },
-      userType,
-      userData: userDataDocument._id,
-      userTypeData: userType === "regular" ? "RegularUserData" : "OrganizationUserData",
-      businessId,
+      role: "user",
     });
+
     await newUser.save();
 
-    // ✅ สร้าง Profile และเชื่อม User
-    const newProfile = new Profile({ // ✅ ใช้ Profile (ตัว P ใหญ่)
+    // ✅ สร้างโปรไฟล์
+    const newProfile = new Profile({
       user: newUser._id,
       name,
-      phone, // ✅ เก็บเบอร์โทร
+      email,
+      phone,
+      gender,
+      birthday,
     });
+
     await newProfile.save();
 
-    // ✅ ส่งอีเมลยืนยัน
-    let activationToken = crypto.randomBytes(32).toString("hex");
-    let refKey = crypto.randomBytes(2).toString("hex").toUpperCase();
+    // ✅ สร้าง token ยืนยันอีเมล
+    const activationToken = crypto.randomBytes(32).toString("hex");
+    const refKey = crypto.randomBytes(2).toString("hex").toUpperCase();
 
-    await redis.hSet(
-      email,
-      { token: activationToken, ref: refKey },
-      { EX: 600 }
-    );
+    await redis.hSet(email, {
+      token: activationToken,
+      ref: refKey,
+    }, { EX: 600 });
+
     await redis.expire(email, 600);
 
     const link = `${process.env.BASE_URL}/api/v1/accounts/verify/email?email=${email}&ref=${refKey}&token=${activationToken}`;
@@ -390,14 +383,14 @@ const register = async (req, res) => {
 
     res.status(201).send({
       status: "success",
-      message: "Successfully Registered! Please confirm email address.",
+      message: "✅ Successfully Registered! Please confirm your email.",
       data: {
         userId: newUser._id,
         profileId: newProfile._id,
       },
     });
   } catch (err) {
-    console.error(err);
+    console.error("❌ Registration error:", err);
     res.status(500).send({ status: "error", message: "Internal server error." });
   }
 };
@@ -484,79 +477,88 @@ const register = async (req, res) => {
 // };
 
 const login = async (req, res, next) => {
-    try {
-      console.log("📌 Request Headers:", req.headers);
-  
-      passport.authenticate("local", { session: false }, async (err, foundUser, info) => {
-        if (err) return next(err);
-        if (!foundUser) return res.status(401).json({ status: "error", message: info?.message || "Unauthorized" });
-  
-        const accessToken = generateToken(
-          { userId: foundUser._id },
-          process.env.JWT_ACCESS_TOKEN_SECRET,
-          process.env.ACCESS_TOKEN_EXPIRES
-        );
-  
-        const refreshToken = generateToken(
-          { userId: foundUser._id },
-          process.env.JWT_REFRESH_TOKEN_SECRET,
-          process.env.REFRESH_TOKEN_EXPIRES
-        );
-  
-        await redis.set(`RefreshToken_${foundUser._id}`, refreshToken, "EX", 7 * 24 * 60 * 60); // หมดอายุใน 7 วัน
-  
-        // ✅ ตั้งค่าคุกกี้สำหรับ accessToken
-        res.cookie("accessToken", accessToken, {
-          httpOnly: true,
-          secure: process.env.NODE_ENV !== "development",
-          sameSite: "Strict",
-          maxAge: 1000 * 60 * 60, // 1 ชั่วโมง
-        });
-  
-        res.cookie("refreshToken", refreshToken, {
-          httpOnly: true,
-          secure: process.env.NODE_ENV !== "development",
-          sameSite: process.env.NODE_ENV !== "development" ? "None" : "Lax",
-          maxAge: 1000 * 60 * 60 * 24 * 7, // 7 วัน
-        });
-  
-        res.cookie("email", foundUser.user?.email || foundUser.email, {
-          httpOnly: true,
-          secure: process.env.NODE_ENV !== "development",
-          sameSite: "Lax",
-          maxAge: 1000 * 60 * 60 * 24 * 7, // 7 วัน
-        });
-  
-        console.log("📌 Cookies ที่ถูกตั้งค่า:", res.getHeaders()["set-cookie"]);
-  
-        // ✅ บันทึกประวัติการเข้าสู่ระบบ
-        await Profile.findOneAndUpdate(
-          { user: foundUser._id },
-          {
-            $push: {
-              loginHistory: {
-                ipAddress: req.ip,
-                userAgent: req.headers["user-agent"],
-                timestamp: new Date(),
-              },
+  try {
+    console.log("📌 Request Headers:", req.headers);
+
+    passport.authenticate("local", { session: false }, async (err, foundUser, info) => {
+      if (err) return next(err);
+      if (!foundUser) {
+        return res.status(401).json({ status: "error", message: info?.message || "Unauthorized" });
+      }
+
+      const accessToken = generateToken(
+        { userId: foundUser._id, role: foundUser.role },
+        process.env.JWT_ACCESS_TOKEN_SECRET,
+        process.env.ACCESS_TOKEN_EXPIRES
+      );
+      
+      const refreshToken = generateToken(
+        { userId: foundUser._id, role: foundUser.role },
+        process.env.JWT_REFRESH_TOKEN_SECRET,
+        process.env.REFRESH_TOKEN_EXPIRES
+      );
+      
+      // ✅ บันทึก Refresh Token ใน Redis
+      await redis.set(`RefreshToken_${foundUser._id}`, refreshToken, "EX", 7 * 24 * 60 * 60);
+
+      // ✅ ตั้งค่าคุกกี้
+      res.cookie("accessToken", accessToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV !== "development",
+        sameSite: "Strict",
+        maxAge: 1000 * 60 * 60, // 1 ชั่วโมง
+      });
+
+      res.cookie("refreshToken", refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV !== "development",
+        sameSite: process.env.NODE_ENV !== "development" ? "None" : "Lax",
+        maxAge: 1000 * 60 * 60 * 24 * 7, // 7 วัน
+      });
+
+      res.cookie("email", foundUser.user?.email || foundUser.email, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV !== "development",
+        sameSite: "Lax",
+        maxAge: 1000 * 60 * 60 * 24 * 7, // 7 วัน
+      });
+
+      console.log("📌 Cookies ที่ถูกตั้งค่า:", res.getHeaders()["set-cookie"]);
+
+      // ✅ บันทึกประวัติการเข้าสู่ระบบ
+      await Profile.findOneAndUpdate(
+        { user: foundUser._id },
+        {
+          $push: {
+            loginHistory: {
+              ipAddress: req.ip,
+              userAgent: req.headers["user-agent"],
+              timestamp: new Date(),
             },
           },
-          { new: true, upsert: true }
-        );
-  
-        return res.status(200).json({
-          status: "success",
-          message: "Login successful",
-          user: { id: foundUser._id, email: foundUser.user?.email || foundUser.email },
-          tokens: {
-            accessToken,
-            refreshToken,
-          },
-        });
-      })(req, res, next);
-    } catch (err) {
-      next(err);
-    }
+        },
+        { new: true, upsert: true }
+      );
+
+      return res.status(200).json({
+        status: "success",
+        message: "Login successful",
+        user: {
+          id: foundUser._id,
+          email: foundUser.user?.email || foundUser.email,
+          role: foundUser.role,
+          name: foundUser.user?.name,
+          phone: foundUser.user?.phone,
+        },
+        tokens: {
+          accessToken,
+          refreshToken,
+        },
+      });
+    })(req, res, next);
+  } catch (err) {
+    next(err);
+  }
 };
 
 const logout = async (req, res, next) => {
