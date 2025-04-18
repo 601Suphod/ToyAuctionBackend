@@ -1,12 +1,10 @@
 const express = require("express");
 const {
   getProfile,
-  updateProfile,           // ✅ ต้องมี
-  getLoginHistory,
-  uploadProfileImage,
-  addAddress,              // ✅ ใหม่
-  deleteAddress,           // ✅ ใหม่
-  setDefaultAddress        // ✅ ใหม่
+  updateProfile,           
+  addAddress,              
+  deleteAddress,           
+  setDefaultAddress        
 } = require("../../controllers/profileController");
 
 const { checkLogin } = require("../../middlewares/authMiddleware");
@@ -20,8 +18,7 @@ router.use(checkLogin);
 
 // 🔹 โปรไฟล์หลัก
 router.get("/", getProfile);
-
-router.get("/history", getLoginHistory);
+router.put('/update-profile', updateProfile)
 router.post("/addresses", addAddress);
 router.delete("/addresses/:addressId", deleteAddress);
 router.patch("/addresses/default/:addressId", setDefaultAddress);

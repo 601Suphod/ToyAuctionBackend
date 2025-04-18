@@ -5,7 +5,7 @@ const notificationSchema = new mongoose.Schema({
   message: { type: String, required: true },
   type: {
     type: String,
-    enum: ["time_warning", "new_bid", "auction_end"], // ✅ เพิ่มตรงนี้
+    enum: ["time_warning", "new_bid", "auction_end"], 
     required: true,
   },
   timestamp: { type: Date, default: Date.now },

@@ -31,23 +31,26 @@ const UserSchema = new mongoose.Schema(
       },
     },
 
-    // ✅ เพิ่ม role แยกแอดมินหรือยูสเซอร์ทั่วไป
     role: {
       type: String,
       enum: ["user", "admin"],
       default: "user",
     },
 
-    // ✅ อุปกรณ์ที่เคยเข้าสู่ระบบ
-    loggedInDevices: [
-      {
-        deviceFingerprint: { type: String },
-        lastLogin: { type: Date, default: Date.now },
-      },
-    ],
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true }
+  }
 );
+
+UserSchema.virtual("profile", {
+  ref: "Profile",
+  localField: "_id",
+  foreignField: "user",
+  justOne: true,
+});
 
 // ❗ ตรวจสอบอีเมลซ้ำ
 UserSchema.pre("save", async function (next) {

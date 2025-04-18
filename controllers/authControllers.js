@@ -333,14 +333,20 @@ const register = async (req, res) => {
   if (!password) return res.status(400).send({ status: "error", message: "Password cannot be empty!" });
 
   try {
-    const existingUser = await user.findOne({ "user.email": email });
-    if (existingUser) {
-      return res.status(409).send({ status: "error", message: "User already exists. Please login instead." });
+    const existingEmail = await user.findOne({ "user.email": email });
+    if (existingEmail) {
+      return res.status(409).send({ status: "error", message: "Email already registered." });
+    }
+
+    if (phone) {
+      const existingPhone = await user.findOne({ "user.phone": phone });
+      if (existingPhone) {
+        return res.status(409).send({ status: "error", message: "Phone number already registered." });
+      }
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // ✅ บันทึก User (ไม่มี userType, userData, businessId แล้ว)
     const newUser = new user({
       user: {
         name,
@@ -355,7 +361,6 @@ const register = async (req, res) => {
 
     await newUser.save();
 
-    // ✅ สร้างโปรไฟล์
     const newProfile = new Profile({
       user: newUser._id,
       name,
@@ -367,7 +372,6 @@ const register = async (req, res) => {
 
     await newProfile.save();
 
-    // ✅ สร้าง token ยืนยันอีเมล
     const activationToken = crypto.randomBytes(32).toString("hex");
     const refKey = crypto.randomBytes(2).toString("hex").toUpperCase();
 
@@ -498,10 +502,8 @@ const login = async (req, res, next) => {
         process.env.REFRESH_TOKEN_EXPIRES
       );
       
-      // ✅ บันทึก Refresh Token ใน Redis
       await redis.set(`RefreshToken_${foundUser._id}`, refreshToken, "EX", 7 * 24 * 60 * 60);
 
-      // ✅ ตั้งค่าคุกกี้
       res.cookie("accessToken", accessToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV !== "development",
@@ -524,21 +526,6 @@ const login = async (req, res, next) => {
       });
 
       console.log("📌 Cookies ที่ถูกตั้งค่า:", res.getHeaders()["set-cookie"]);
-
-      // ✅ บันทึกประวัติการเข้าสู่ระบบ
-      await Profile.findOneAndUpdate(
-        { user: foundUser._id },
-        {
-          $push: {
-            loginHistory: {
-              ipAddress: req.ip,
-              userAgent: req.headers["user-agent"],
-              timestamp: new Date(),
-            },
-          },
-        },
-        { new: true, upsert: true }
-      );
 
       return res.status(200).json({
         status: "success",

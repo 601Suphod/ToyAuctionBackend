@@ -33,15 +33,8 @@ router.get("/slip-by-auction/:auctionId", checkLogin, paymentController.getSlipB
 router.post("/confirm-payment/by-auction/:auctionId", checkLogin, paymentController.confirmPaymentByAuctionId);
 router.post("/shipping-status/:paymentId", checkLogin, paymentController.updateShippingStatus);
 router.post("/shipping-address/:paymentId", checkLogin, paymentController.updateShippingAddress);
-
-/* ---------------------- 🛡️ ROUTES สำหรับ ADMIN ---------------------- */
-
-router.get("/admin/pending", checkLogin, isAdmin, paymentController.getPendingPayments);
-router.post("/admin/:id/approve", checkLogin, isAdmin, paymentController.approvePayment);
-router.get("/admin/paid", checkLogin, isAdmin, paymentController.getPaidPaymentsByDateRange); // ✅ ใหม่
-router.post("/admin/:id/reject", checkLogin, isAdmin, paymentController.rejectPayment);
-router.get("/admin/payment/:id", checkLogin, isAdmin, paymentController.getPaymentById);
-
-/* --------------------------------------------------------------------- */
+router.get("/shipping-history/:auctionId", checkLogin, paymentController.getShippingHistory);
+router.patch("/confirm-delivery/:auctionId", checkLogin, paymentController.confirmDeliveryByAuctionId);
+router.get("/receipt/:paymentId/pdf", checkLogin, paymentController.downloadReceiptPDF);
 
 module.exports = router;

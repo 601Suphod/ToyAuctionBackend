@@ -153,8 +153,13 @@ setInterval(handleAuctionNotifications, 10000);
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 
+
+
 app.use(express.json()); // ✅ รองรับ JSON body
 app.use(express.urlencoded({ extended: true })); // ✅ รองรับ Form Data
+
+const v1AdminRouter = require("./routes/v1/adminRoutes");
+app.use("/api/v1/admin", v1AdminRouter);
 
 const v1PaymentRoutes = require("./routes/v1/paymentRoutes");
 app.use("/api/v1/payment", v1PaymentRoutes);
@@ -219,5 +224,6 @@ app.use(function (err, req, res, next) {
   res.status(err.status || 500);
   res.render("error");
 });
+
 
 module.exports = { app, server, io };

@@ -11,7 +11,6 @@ const getBase64Image = (profileImage) => {
   return `data:${profileImage.contentType};base64,${profileImage.data.toString("base64")}`;
 };
 
-// ดึงข้อมูลโปรไฟล์พร้อมที่อยู่
 exports.getProfile = async (req, res) => {
   try {
     const userId = req.user.userId;
@@ -28,7 +27,7 @@ exports.getProfile = async (req, res) => {
       data: {
         name: profile.name,
         email: userObj?.email || "ไม่มีอีเมล",
-        phone: userObj?.phone || profile.phone || "ไม่มีเบอร์โทร",
+        phone: profile.phone || "ไม่มีเบอร์โทร",
         gender: profile.gender || "ไม่ระบุ",
         birthday: profile.birthday || null,
         addresses: profile.addresses || [],
@@ -44,7 +43,7 @@ exports.getProfile = async (req, res) => {
   }
 };
 
-// ✅ เพิ่มที่อยู่ใหม่ พร้อมชื่อผู้รับ เบอร์ และตำแหน่ง GPS
+
 exports.addAddress = async (req, res) => {
   try {
     const userId = req.user.userId;
@@ -76,7 +75,7 @@ exports.addAddress = async (req, res) => {
   }
 };
 
-// ลบที่อยู่
+
 exports.deleteAddress = async (req, res) => {
   try {
     const userId = req.user.userId;
@@ -105,7 +104,6 @@ exports.deleteAddress = async (req, res) => {
   }
 };
 
-// ตั้งค่าที่อยู่เป็นค่าเริ่มต้น
 exports.setDefaultAddress = async (req, res) => {
   try {
     const userId = req.user.userId;
@@ -116,10 +114,10 @@ exports.setDefaultAddress = async (req, res) => {
       return res.status(404).json({ status: "error", message: "ไม่พบโปรไฟล์" });
     }
 
-    profile.addresses = profile.addresses.map(addr => ({
-      ...addr.toObject(),
-      isDefault: addr._id.toString() === addressId
-    }));
+    // ✅ อัปเดตโดยตรง
+    profile.addresses.forEach(addr => {
+      addr.isDefault = addr._id.toString() === addressId;
+    });
 
     await profile.save();
 
@@ -130,15 +128,16 @@ exports.setDefaultAddress = async (req, res) => {
   }
 };
 
-// ✅ อัปเดตข้อมูลโปรไฟล์ (เพิ่ม gender, birthday)
+
 exports.updateProfile = async (req, res) => {
   try {
     const userId = req.user.userId;
-    const { name, phone, address, gender, birthday } = req.body;
+    const { name, phone, gender, birthday } = req.body;
 
+    // 🔹 อัปเดต Profile
     const profile = await Profile.findOneAndUpdate(
       { user: userId },
-      { name, phone, address, gender, birthday },
+      { name, phone, gender, birthday },
       { new: true }
     );
 
@@ -146,27 +145,26 @@ exports.updateProfile = async (req, res) => {
       return res.status(404).json({ status: "error", message: "ไม่พบโปรไฟล์" });
     }
 
-    const user = await User.findByIdAndUpdate(
-      userId,
-      { "user.name": name, "user.phone": phone },
-      { new: true }
-    );
+    await User.findByIdAndUpdate(userId, { phone });
+
+    const userObj = await User.findById(userId);
 
     res.status(200).json({
       status: "success",
       data: {
         name: profile.name,
-        phone: profile.phone,
-        address: profile.address,
+        phone: userObj?.phone || profile.phone,
         gender: profile.gender,
         birthday: profile.birthday,
         profileImage: getBase64Image(profile.profileImage)
       }
     });
   } catch (err) {
+    console.error("❌ updateProfile error:", err);
     res.status(500).json({ status: "error", message: err.message });
   }
 };
+
 
 // ✅ ตั้งค่า multer สำหรับอัปโหลดรูป
 const storage = multer.diskStorage({
@@ -177,6 +175,7 @@ const storage = multer.diskStorage({
     cb(null, file.fieldname + '-' + Date.now() + path.extname(file.originalname));
   }
 });
+
 const upload = multer({ storage });
 
 // ✅ อัปโหลดรูปโปรไฟล์
@@ -207,59 +206,4 @@ exports.uploadProfileImage = async (req, res) => {
   }
 };
 
-// ✅ บันทึกประวัติการเข้าสู่ระบบ
-exports.recordLoginHistory = async (req, userId) => {
-  try {
-    const profile = await Profile.findOne({ user: userId });
-    if (!profile) return;
-
-    const userAgent = uaParser(req.headers["user-agent"]);
-    const ip = req.headers["x-forwarded-for"] || req.connection.remoteAddress;
-    const geo = geoip.lookup(ip) || {};
-
-    const loginEntry = {
-      ipAddress: ip,
-      userAgent: req.headers["user-agent"],
-      device: `${userAgent.device.vendor || "Unknown"} ${userAgent.device.model || ""}`,
-      os: `${userAgent.os.name} ${userAgent.os.version}`,
-      browser: `${userAgent.browser.name} ${userAgent.browser.version}`,
-      location: `${geo.city || "Unknown"}, ${geo.country || "Unknown"}`,
-      timestamp: new Date(),
-    };
-
-    profile.loginHistory.unshift(loginEntry);
-    if (profile.loginHistory.length > 10) {
-      profile.loginHistory.pop();
-    }
-
-    await profile.save();
-  } catch (err) {
-    console.error("Error recording login history:", err);
-  }
-};
-
-// ✅ ดึงประวัติการเข้าสู่ระบบ
-exports.getLoginHistory = async (req, res) => {
-  try {
-    const userId = req.user?.userId;
-    if (!userId) {
-      return res.status(401).json({ status: "error", message: "Unauthorized: กรุณาเข้าสู่ระบบ" });
-    }
-
-    const profile = await Profile.findOne({ user: userId });
-
-    if (!profile) {
-      return res.status(404).json({ status: "error", message: "ไม่พบโปรไฟล์ของผู้ใช้" });
-    }
-
-    return res.status(200).json({
-      status: "success",
-      data: { loginHistory: profile.loginHistory || [] }
-    });
-
-  } catch (err) {
-    console.error("🚨 getLoginHistory Error:", err);
-    res.status(500).json({ status: "error", message: "เกิดข้อผิดพลาดในการดึงข้อมูล" });
-  }
-};
 
